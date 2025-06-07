@@ -386,7 +386,7 @@
       .hidden-msg-highlight::after{content:"potentially encoded text found - hover to review";position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#ffc107;color:#333;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 0.2s;z-index:2147483646}
       .hidden-msg-highlight:hover::after{opacity:1}
 
-      .hidden-msg-hover-tooltip{position:absolute;background:#333;color:white;padding:8px 12px;border-radius:6px;font-size:14px;max-width:300px;word-wrap:break-word;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.2s}
+      .hidden-msg-hover-tooltip{position:absolute;background:#333;color:white;padding:8px 12px;border-radius:6px;font-size:14px;max-width:300px;word-wrap:break-word;z-index:2147483647;pointer-events:auto;opacity:0;transition:opacity 0.2s}
       .hidden-msg-hover-tooltip.show{opacity:1}
 
       .hidden-msg-encode-tabs{margin-top:16px}
@@ -492,8 +492,7 @@
           </div>
 
           <div class="hidden-msg-footer">
-            <a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Original demo code source on GitHub</a>
-            <a href="https://github.com/aporeticaxis/demojify/" class="hidden-msg-link" target="_blank">Link to >this< Tampermonkey script project GitHub</a>
+            <a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Source on GitHub</a>
           </div>
         </div>
       `;
@@ -539,26 +538,34 @@
         });
       }
 
-      // Comprehensive decode function that tries all methods
+      // Enhanced comprehensive decode function that tries all methods including cascade detection
       function tryDecodeText(text) {
         if (!text || !text.trim()) return null;
 
-        // Try original method first (most common)
+        // Try legacy methods first for backward compatibility
         let decoded = decodeMessage(text);
-        if (decoded) return decoded;
+        if (decoded) return { text: decoded, mapping: '32-VS' };
 
-        // Try multi-carrier method
         decoded = decodeFromCarriers(text);
-        if (decoded) return decoded;
+        if (decoded) return { text: decoded, mapping: '32-VS' };
 
-        // Try trimming whitespace and retrying
+        // Try trimming whitespace and retrying legacy methods
         const trimmed = text.trim();
         if (trimmed !== text) {
           decoded = decodeMessage(trimmed);
-          if (decoded) return decoded;
+          if (decoded) return { text: decoded, mapping: '32-VS' };
 
           decoded = decodeFromCarriers(trimmed);
-          if (decoded) return decoded;
+          if (decoded) return { text: decoded, mapping: '32-VS' };
+        }
+
+        // Use enhanced cascade decoder as fallback
+        const cps = [...text].map(c => c.codePointAt(0))
+                             .filter(cp => cp >= 0x200B);
+
+        if (cps.length > 0) {
+          const result = bruteDecode(cps);
+          if (result) return result;
         }
 
         return null;
@@ -753,11 +760,23 @@
         }
       };
 
-      // Setup decoding
-      function showDecodeResult(message) {
+      // Setup decoding with enhanced mapping display
+      function showDecodeResult(result) {
         decodeResult.style.display = 'block';
         decodeResult.className = 'hidden-msg-decode-result';
-        decodeResult.textContent = `Hidden message: ${message}`;
+
+        // Handle both old string format and new object format for backward compatibility
+        if (typeof result === 'string') {
+          decodeResult.textContent = `Hidden message: ${result}`;
+        } else if (result && result.text) {
+          // Enhanced display with mapping information
+          const mappingInfo = result.mapping || 'unknown';
+          const details = result.details ? ` (${result.details})` : '';
+          decodeResult.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 8px;">Hidden message: ${result.text}</div>
+            <div style="color: #666; font-size: 12px;">Encoding: ${mappingInfo}${details}</div>
+          `;
+        }
       }
 
       function showNoMessage() {
@@ -835,13 +854,242 @@
       modal.handleFreeFormEmojiSelection = handleFreeFormEmojiSelection;
     }
 
-    /* ---------- 5. Beta Page Scanner ---------- */
+    /* ---------- 5. Enhanced Beta Page Scanner with Multi-Encoding Detection ---------- */
     let scannerObserver = null;
     let highlightedElements = new Set();
     let betaScannerEnabled = false; // Cache beta scanner state
 
+    // Confidence checking function
+    function isLikelyText(str) {
+      if (!str) return false;
+      const printable = str.match(/[\p{L}\p{N}\p{P}\p{Zs}]/gu) || [];
+      return printable.length / str.length > 0.75;
+    }
+
+    // Helper function for UTF-8 validation
+    function tryUtf8(bytes) {
+      try {
+        let result = '';
+        let i = 0;
+        while (i < bytes.length) {
+          let byte1 = bytes[i++];
+
+          if (byte1 < 128) {
+            // Single byte character (ASCII)
+            result += String.fromCharCode(byte1);
+          } else if ((byte1 & 0xE0) === 0xC0) {
+            // Two byte character
+            if (i >= bytes.length) break;
+            let byte2 = bytes[i++];
+            result += String.fromCharCode(((byte1 & 0x1F) << 6) | (byte2 & 0x3F));
+          } else if ((byte1 & 0xF0) === 0xE0) {
+            // Three byte character
+            if (i + 1 >= bytes.length) break;
+            let byte2 = bytes[i++];
+            let byte3 = bytes[i++];
+            result += String.fromCharCode(((byte1 & 0x0F) << 12) | ((byte2 & 0x3F) << 6) | (byte3 & 0x3F));
+          } else if ((byte1 & 0xF8) === 0xF0) {
+            // Four byte character (convert to surrogate pair)
+            if (i + 2 >= bytes.length) break;
+            let byte2 = bytes[i++];
+            let byte3 = bytes[i++];
+            let byte4 = bytes[i++];
+            let codePoint = ((byte1 & 0x07) << 18) | ((byte2 & 0x3F) << 12) | ((byte3 & 0x3F) << 6) | (byte4 & 0x3F);
+            if (codePoint > 0xFFFF) {
+              codePoint -= 0x10000;
+              result += String.fromCharCode(0xD800 + (codePoint >> 10));
+              result += String.fromCharCode(0xDC00 + (codePoint & 0x3FF));
+            } else {
+              result += String.fromCharCode(codePoint);
+            }
+          } else {
+            // Invalid byte, skip
+            continue;
+          }
+        }
+        return result;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    // Known encoding mappings
+    const KNOWN_MAPS = [
+      {
+        name: '32-VS',
+        cpToByte: (cp) => {
+          if (cp >= 0xFE00 && cp <= 0xFE0F) return cp - 0xFE00;        // 0-15
+          if (cp >= 0xE0100 && cp <= 0xE01EF) return cp - 0xE0100 + 16; // 16-31
+          return null;
+        }
+      },
+      {
+        name: '16-VS',
+        cpToByte: (cp) => {
+          if (cp >= 0xFE00 && cp <= 0xFE0F) return cp - 0xFE00;        // 0-15 (4-bit nibbles)
+          return null;
+        }
+      },
+      {
+        name: 'ZW-SPACE',
+        cpToByte: (cp) => {
+          if (cp === 0x200B) return 1;  // ZWSP = 1
+          if (cp === 0x200C) return 0;  // ZWNJ = 0
+          return null;
+        }
+      },
+      {
+        name: 'ZWJ-BINARY',
+        cpToByte: (cp) => {
+          if (cp === 0x200D) return 1;  // ZWJ = 1
+          if (cp === 0x200C) return 0;  // ZWNJ = 0
+          return null;
+        }
+      }
+    ];
+
+    // Cascade decoder with multiple encoding scheme detection
+    function bruteDecode(codePoints) {
+      if (!codePoints || codePoints.length === 0) return null;
+
+      // Try each known mapping
+      for (const mapping of KNOWN_MAPS) {
+        const bytes = [];
+        let validMapping = true;
+
+        for (const cp of codePoints) {
+          const byte = mapping.cpToByte(cp);
+          if (byte !== null) {
+            bytes.push(byte);
+          } else if (cp >= 0x200B) {
+            // This is a zero-width character we don't recognize for this mapping
+            validMapping = false;
+            break;
+          }
+          // Ignore non-zero-width characters for this mapping attempt
+        }
+
+        if (validMapping && bytes.length > 0) {
+          let decodedText = null;
+
+          if (mapping.name === '16-VS') {
+            // Special handling for 4-bit nibble encoding
+            if (bytes.length % 2 === 0) {
+              const fullBytes = [];
+              for (let i = 0; i < bytes.length; i += 2) {
+                fullBytes.push((bytes[i] << 4) | bytes[i + 1]);
+              }
+              decodedText = tryUtf8(fullBytes);
+            }
+          } else if (mapping.name.includes('BINARY') || mapping.name.includes('ZW')) {
+            // Binary encoding - convert bits to bytes
+            if (bytes.length >= 8) {
+              const fullBytes = [];
+              for (let i = 0; i < bytes.length; i += 8) {
+                let byte = 0;
+                for (let j = 0; j < 8 && i + j < bytes.length; j++) {
+                  byte |= (bytes[i + j] << (7 - j));
+                }
+                fullBytes.push(byte);
+              }
+              decodedText = tryUtf8(fullBytes);
+            }
+          } else {
+            // Standard byte encoding (like 32-VS)
+            decodedText = tryUtf8(bytes);
+          }
+
+          if (decodedText && isLikelyText(decodedText)) {
+            return { text: decodedText, mapping: mapping.name };
+          }
+        }
+      }
+
+      // Try auto-learning for unknown mappings
+      const autoResult = autoLearnMapping(codePoints);
+      if (autoResult) {
+        return autoResult;
+      }
+
+      return null;
+    }
+
+    // Auto-learning heuristic for unknown mappings
+    function autoLearnMapping(cps) {
+      if (!cps || cps.length < 16) return null; // Need sufficient data
+
+      // Group consecutive zero-width characters
+      const zwGroups = [];
+      let currentGroup = [];
+
+      for (const cp of cps) {
+        if (cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)) {
+          currentGroup.push(cp);
+        } else if (currentGroup.length > 0) {
+          zwGroups.push([...currentGroup]);
+          currentGroup = [];
+        }
+      }
+      if (currentGroup.length > 0) {
+        zwGroups.push(currentGroup);
+      }
+
+      if (zwGroups.length === 0) return null;
+
+      // Try to detect patterns
+      const uniqueChars = [...new Set(cps.filter(cp =>
+        cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)
+      ))];
+
+      // If we have 2-16 unique characters, try simple substitution
+      if (uniqueChars.length >= 2 && uniqueChars.length <= 16) {
+        // Try treating each unique character as a different value
+        const charToValue = {};
+        uniqueChars.forEach((char, index) => {
+          charToValue[char] = index;
+        });
+
+        const values = cps.map(cp => charToValue[cp]).filter(v => v !== undefined);
+
+        // Try different interpretations
+        const attempts = [];
+
+        // Attempt 1: Direct byte values
+        if (uniqueChars.length <= 256) {
+          attempts.push(values);
+        }
+
+        // Attempt 2: Binary if exactly 2 unique chars
+        if (uniqueChars.length === 2 && values.length >= 8) {
+          const bytes = [];
+          for (let i = 0; i < values.length; i += 8) {
+            let byte = 0;
+            for (let j = 0; j < 8 && i + j < values.length; j++) {
+              byte |= (values[i + j] << (7 - j));
+            }
+            bytes.push(byte);
+          }
+          attempts.push(bytes);
+        }
+
+        // Try each attempt
+        for (const attempt of attempts) {
+          const text = tryUtf8(attempt);
+          if (text && isLikelyText(text)) {
+            return {
+              text: text,
+              mapping: 'auto-learned',
+              details: `${uniqueChars.length} unique chars`
+            };
+          }
+        }
+      }
+
+      return null;
+    }
+
     function startPageScanning() {
-      log('🧪 Beta scanner activated - scanning page for encoded text...');
+      log('🧪 Enhanced beta scanner activated - scanning for multiple encoding schemes...');
 
       // Initial scan
       scanPageForEncodedText();
@@ -864,7 +1112,7 @@
     }
 
     function stopPageScanning() {
-      log('🧪 Beta scanner deactivated');
+      log('🧪 Enhanced beta scanner deactivated');
 
       // Stop observer
       if (scannerObserver) {
@@ -910,30 +1158,43 @@
         textNodes.push(node);
       }
 
-      // Check each text node for encoded content
+      // Check each text node for encoded content using enhanced detection
       textNodes.forEach(textNode => {
-        const text = textNode.textContent.trim();
+        const text = textNode.textContent;
         if (!text || text.length < 2) return;
 
-        // Try to decode the text
-        const decoded = tryDecodeText(text);
-        if (decoded && decoded.length > 0) {
-          highlightEncodedText(textNode, text, decoded);
+        // Extract code points and filter for potential encoding characters
+        const cps = [...text].map(c => c.codePointAt(0))
+                           .filter(cp => cp >= 0x200B);    // cheap pre-filter for zero-width chars
+
+        if (cps.length === 0) return;
+
+        // Use the robust cascade decoder
+        const result = bruteDecode(cps);
+
+        if (result && result.text) {
+          highlightEncodedText(textNode, text, result.text, result.mapping, result.details);
         }
       });
     }
 
-    function highlightEncodedText(textNode, originalText, decodedText) {
+    function highlightEncodedText(textNode, originalText, decodedText, mapping = 'unknown', details = '') {
       // Create highlight wrapper
       const highlight = document.createElement('span');
       highlight.className = 'hidden-msg-highlight';
       highlight.textContent = originalText;
 
+      // Store decoding information for tooltip
+      highlight.dataset.decodedText = decodedText;
+      highlight.dataset.mapping = mapping;
+      highlight.dataset.details = details;
+      highlight.dataset.originalText = originalText;
+
       // Add hover functionality
       let hoverTimeout;
       highlight.addEventListener('mouseenter', (e) => {
         clearTimeout(hoverTimeout);
-        hoverTimeout = setTimeout(() => showHoverTooltip(e.target, decodedText), 100);
+        hoverTimeout = setTimeout(() => showHoverTooltip(e.target, decodedText, mapping, details, originalText), 100);
       });
 
       highlight.addEventListener('mouseleave', () => {
@@ -948,14 +1209,57 @@
       }
     }
 
-    function showHoverTooltip(element, decodedText) {
+    function showHoverTooltip(element, decodedText, mapping = 'unknown', details = '', originalText = '') {
       // Remove any existing tooltip
       hideHoverTooltip();
 
       const tooltip = document.createElement('div');
       tooltip.className = 'hidden-msg-hover-tooltip';
-      tooltip.textContent = `Decoded: ${decodedText}`;
 
+      // Create tooltip content
+      const content = document.createElement('div');
+      content.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 4px;">Decoded: ${decodedText}</div>
+        <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
+      `;
+
+      // Add "copy raw selectors" button for unknown mappings
+      if (mapping === 'unknown' || mapping === 'auto-learned') {
+        const copyBtn = document.createElement('button');
+        copyBtn.innerHTML = '📋 copy raw selectors';
+        copyBtn.style.cssText = `
+          background: #666;
+          color: white;
+          border: none;
+          padding: 2px 6px;
+          margin-top: 4px;
+          border-radius: 3px;
+          font-size: 10px;
+          cursor: pointer;
+          display: block;
+        `;
+        copyBtn.onclick = (e) => {
+          e.stopPropagation();
+
+          // Extract raw variation selectors and zero-width chars
+          const rawSelectors = [...originalText]
+            .map(c => c.codePointAt(0))
+            .filter(cp => cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF))
+            .map(cp => `U+${cp.toString(16).toUpperCase()}`)
+            .join(' ');
+
+          navigator.clipboard.writeText(rawSelectors).then(() => {
+            copyBtn.innerHTML = '✅ copied!';
+            setTimeout(() => copyBtn.innerHTML = '📋 copy raw selectors', 1000);
+          }).catch(() => {
+            copyBtn.innerHTML = '❌ failed';
+            setTimeout(() => copyBtn.innerHTML = '📋 copy raw selectors', 1000);
+          });
+        };
+        content.appendChild(copyBtn);
+      }
+
+      tooltip.appendChild(content);
       document.body.appendChild(tooltip);
 
       // Position tooltip
@@ -977,26 +1281,34 @@
       }
     }
 
-    // Comprehensive decode function for scanner (reuse from modal)
+    // Enhanced decode function for scanner that tries legacy methods first, then cascade
     function tryDecodeText(text) {
       if (!text || !text.trim()) return null;
 
-      // Try original method first (most common)
+      // Try legacy methods first for backward compatibility
       let decoded = decodeMessage(text);
-      if (decoded) return decoded;
+      if (decoded) return { text: decoded, mapping: '32-VS' };
 
-      // Try multi-carrier method
       decoded = decodeFromCarriers(text);
-      if (decoded) return decoded;
+      if (decoded) return { text: decoded, mapping: '32-VS' };
 
-      // Try trimming whitespace and retrying
+      // Try trimming whitespace and retrying legacy methods
       const trimmed = text.trim();
       if (trimmed !== text) {
         decoded = decodeMessage(trimmed);
-        if (decoded) return decoded;
+        if (decoded) return { text: decoded, mapping: '32-VS' };
 
         decoded = decodeFromCarriers(trimmed);
-        if (decoded) return decoded;
+        if (decoded) return { text: decoded, mapping: '32-VS' };
+      }
+
+      // Use enhanced cascade decoder as fallback
+      const cps = [...text].map(c => c.codePointAt(0))
+                           .filter(cp => cp >= 0x200B);
+
+      if (cps.length > 0) {
+        const result = bruteDecode(cps);
+        if (result) return result;
       }
 
       return null;
