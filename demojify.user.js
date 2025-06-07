@@ -492,7 +492,8 @@
           </div>
 
           <div class="hidden-msg-footer">
-            <a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Source on GitHub</a>
+            <a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Original demo code source on GitHub</a>
+            <a href="https://github.com/aporeticaxis/demojify/" class="hidden-msg-link" target="_blank">Link to >this< Tampermonkey script project GitHub</a>
           </div>
         </div>
       `;
