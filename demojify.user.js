@@ -383,11 +383,13 @@
       .hidden-msg-decode-result.no-message{background:#fff3cd;border-color:#ffeaa7;color:#8d6e63;word-wrap:break-word;word-break:break-word;white-space:pre-wrap;overflow-wrap:break-word}
 
       .hidden-msg-highlight{position:relative;background:rgba(255,235,59,0.3);border:2px dashed #ffc107;border-radius:4px;cursor:pointer;display:inline;padding:2px 4px;margin:0 2px}
-      .hidden-msg-highlight::after{content:"potentially encoded text found - hover to review";position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#ffc107;color:#333;padding:4px 8px;border-radius:4px;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 0.2s;z-index:2147483646}
-      .hidden-msg-highlight:hover::after{opacity:1}
 
-      .hidden-msg-hover-tooltip{position:absolute;background:#333;color:white;padding:8px 12px;border-radius:6px;font-size:14px;max-width:300px;word-wrap:break-word;z-index:2147483647;pointer-events:auto;opacity:0;transition:opacity 0.2s}
+      /* Completely disable CSS tooltip - we'll use JavaScript only */
+      .hidden-msg-highlight::after{display:none !important}
+
+      .hidden-msg-hover-tooltip{position:fixed;background:#333;color:white;padding:12px 16px;border-radius:8px;font-size:14px;max-width:350px;word-wrap:break-word;z-index:2147483650;pointer-events:none;opacity:0;transition:opacity 0.2s ease;box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid #555}
       .hidden-msg-hover-tooltip.show{opacity:1}
+      .hidden-msg-hover-tooltip button{pointer-events:auto}
 
       .hidden-msg-encode-tabs{margin-top:16px}
       .hidden-msg-tab-nav{display:flex;background:#f0f0f0;border-radius:8px;padding:4px;margin-bottom:20px}
@@ -538,38 +540,7 @@
         });
       }
 
-      // Enhanced comprehensive decode function that tries all methods including cascade detection
-      function tryDecodeText(text) {
-        if (!text || !text.trim()) return null;
-
-        // Try legacy methods first for backward compatibility
-        let decoded = decodeMessage(text);
-        if (decoded) return { text: decoded, mapping: '32-VS' };
-
-        decoded = decodeFromCarriers(text);
-        if (decoded) return { text: decoded, mapping: '32-VS' };
-
-        // Try trimming whitespace and retrying legacy methods
-        const trimmed = text.trim();
-        if (trimmed !== text) {
-          decoded = decodeMessage(trimmed);
-          if (decoded) return { text: decoded, mapping: '32-VS' };
-
-          decoded = decodeFromCarriers(trimmed);
-          if (decoded) return { text: decoded, mapping: '32-VS' };
-        }
-
-        // Use enhanced cascade decoder as fallback
-        const cps = [...text].map(c => c.codePointAt(0))
-                             .filter(cp => cp >= 0x200B);
-
-        if (cps.length > 0) {
-          const result = bruteDecode(cps);
-          if (result) return result;
-        }
-
-        return null;
-      }
+      // Use the global tryDecodeText function (defined below)
 
       // Pre-fill with selected text - RESPECT preferredMode
       if (selectedText) {
@@ -1158,22 +1129,25 @@
         textNodes.push(node);
       }
 
-      // Check each text node for encoded content using enhanced detection
+      // Check each text node for encoded content using the same logic as the modal
       textNodes.forEach(textNode => {
         const text = textNode.textContent;
         if (!text || text.length < 2) return;
 
-        // Extract code points and filter for potential encoding characters
-        const cps = [...text].map(c => c.codePointAt(0))
-                           .filter(cp => cp >= 0x200B);    // cheap pre-filter for zero-width chars
-
-        if (cps.length === 0) return;
-
-        // Use the robust cascade decoder
-        const result = bruteDecode(cps);
+        // Use the same decode function as the modal for consistency
+        const result = tryDecodeText(text);
 
         if (result && result.text) {
-          highlightEncodedText(textNode, text, result.text, result.mapping, result.details);
+          console.log('[HiddenMsg] Beta scanner found encoded text:', {
+            originalText: text,
+            decodedText: result.text,
+            mapping: result.mapping,
+            details: result.details
+          });
+
+          const mapping = result.mapping || 'unknown';
+          const details = result.details || '';
+          highlightEncodedText(textNode, text, result.text, mapping, details);
         }
       });
     }
@@ -1194,7 +1168,15 @@
       let hoverTimeout;
       highlight.addEventListener('mouseenter', (e) => {
         clearTimeout(hoverTimeout);
-        hoverTimeout = setTimeout(() => showHoverTooltip(e.target, decodedText, mapping, details, originalText), 100);
+        hoverTimeout = setTimeout(() => {
+          const target = e.target;
+          const storedDecodedText = target.dataset.decodedText;
+          const storedMapping = target.dataset.mapping;
+          const storedDetails = target.dataset.details;
+          const storedOriginalText = target.dataset.originalText;
+
+          showHoverTooltip(target, storedDecodedText, storedMapping, storedDetails, storedOriginalText);
+        }, 100);
       });
 
       highlight.addEventListener('mouseleave', () => {
@@ -1212,6 +1194,16 @@
     function showHoverTooltip(element, decodedText, mapping = 'unknown', details = '', originalText = '') {
       // Remove any existing tooltip
       hideHoverTooltip();
+
+      console.log('[HiddenMsg] showHoverTooltip called with:', {
+        decodedText,
+        mapping,
+        details,
+        originalText: originalText.substring(0, 50) + '...'
+      });
+
+      // Hide CSS tooltip by adding class to the element
+      element.classList.add('has-js-tooltip');
 
       const tooltip = document.createElement('div');
       tooltip.className = 'hidden-msg-hover-tooltip';
@@ -1262,22 +1254,48 @@
       tooltip.appendChild(content);
       document.body.appendChild(tooltip);
 
-      // Position tooltip
+      // Position tooltip - ensure it's visible
       const rect = element.getBoundingClientRect();
-      tooltip.style.left = rect.left + 'px';
-      tooltip.style.top = (rect.bottom + 5) + 'px';
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
 
-      // Show tooltip
-      setTimeout(() => tooltip.classList.add('show'), 10);
+      // Default positioning
+      let left = rect.left;
+      let top = rect.bottom + 5;
+
+      // Adjust if tooltip would go off-screen
+      if (left + 300 > viewportWidth) {
+        left = viewportWidth - 310; // Account for tooltip max-width + margin
+      }
+      if (left < 10) {
+        left = 10;
+      }
+
+      if (top + 100 > viewportHeight) {
+        top = rect.top - 105; // Show above element instead
+      }
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+
+      // Show tooltip immediately (remove delay)
+      tooltip.classList.add('show');
 
       // Store reference for cleanup
       window.currentTooltip = tooltip;
+      window.currentTooltipElement = element;
     }
 
     function hideHoverTooltip() {
       if (window.currentTooltip) {
         window.currentTooltip.remove();
         window.currentTooltip = null;
+      }
+
+      // Remove the class that hides CSS tooltip
+      if (window.currentTooltipElement) {
+        window.currentTooltipElement.classList.remove('has-js-tooltip');
+        window.currentTooltipElement = null;
       }
     }
 
