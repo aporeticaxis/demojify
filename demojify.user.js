@@ -200,18 +200,20 @@
           }
         }
 
-        // Find positions where we can encode (non-space characters)
+        // Find positions where we can encode (avoid double spacing)
         const chars = [...carriersText];
         const encodePositions = [];
 
         for (let i = 0; i < chars.length; i++) {
           const char = chars[i];
+          const prevChar = i > 0 ? chars[i - 1] : null;
           const nextChar = i + 1 < chars.length ? chars[i + 1] : null;
 
           // Encode into characters that:
           // 1. Are not spaces
-          // 2. Either are followed by a space, or are at the end (where visual spacing is expected)
-          if (char !== ' ' && (nextChar === ' ' || nextChar === null || i === chars.length - 1)) {
+          // 2. Are NOT preceded by a space (avoids visual double spacing)
+          // 3. Prefer characters at the end of words or standalone characters
+          if (char !== ' ' && prevChar !== ' ') {
             encodePositions.push(i);
           }
         }
@@ -480,7 +482,10 @@
 
                   <button class="hidden-msg-paste-btn" id="encode-btn">🔮 Encode Message</button>
 
-                  <div class="hidden-msg-output" id="output-area-freeform"></div>
+                  <div class="hidden-msg-output-container">
+                    <div class="hidden-msg-output" id="output-area-freeform"></div>
+                    <button class="hidden-msg-copy-btn" id="copy-btn-freeform" style="display:none">📋 Copy to Clipboard</button>
+                  </div>
                 </div>
               </div>
             </div>
