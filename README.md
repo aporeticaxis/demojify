@@ -3,7 +3,7 @@
 ![version](https://img.shields.io/badge/version-2025--06--07.11-blue)
 ![tampermonkey](https://img.shields.io/badge/Userscript-Tampermonkey-orange)
 
-> Hide any UTF-8 text inside **invisible Unicode variation selectors**  (extending the excellent work of ![emoji-encoder](https://github.com/paulgb/emoji-encoder))
+> Hide any UTF-8 text inside **invisible Unicode variation selectors**  (extending the excellent work of [emoji-encoder](https://github.com/paulgb/emoji-encoder))
 ---
 
 ## ⚡ Quick Start
@@ -12,7 +12,7 @@
 
 3. **Grab the script**  
    *Preferred:* **Click** <kbd>Raw</kbd> on [`demojify.user.js`](./demojify.user.js).
-   [direct](https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js)
+   [>or click here<](https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js)
    Tampermonkey pops up an *Install* dialog automatically.  
    *Alternate:* Copy the code → Tampermonkey Dashboard → **➕ Create** → paste → **Save**.
 
