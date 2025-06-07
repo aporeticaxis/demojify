@@ -10,14 +10,15 @@
 
 1. **Install Tampermonkey**
 
-2. **Grab the script**  
-   *Preferred:* **Click** <kbd>Raw</kbd> on [`demojify.user.js`](./demojify.user.js).  
+3. **Grab the script**  
+   *Preferred:* **Click** <kbd>Raw</kbd> on [`demojify.user.js`](./demojify.user.js).
+   [direct](https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js)
    Tampermonkey pops up an *Install* dialog automatically.  
    *Alternate:* Copy the code → Tampermonkey Dashboard → **➕ Create** → paste → **Save**.
 
-3. Reload any page – the 🕵️ button appears bottom-right.
+5. Reload any page – the 🕵️ button appears bottom-right.
 
-4. • **Encode:** `Ctrl + Shift + F` → type secret → pick emoji → copy  
+6. • **Encode:** `Ctrl + Shift + F` → type secret → pick emoji → copy  
    • **Decode:** select text → `Ctrl + Shift + V`
 
 *(Everything runs 100 % locally – no data ever leaves your browser.)*
