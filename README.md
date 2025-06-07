@@ -2,6 +2,7 @@
 
 ![version](https://img.shields.io/badge/version-2025--06--07.11-blue)
 ![tampermonkey](https://img.shields.io/badge/Userscript-Tampermonkey-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 > Hide any UTF-8 text inside **invisible Unicode variation selectors**  (extending the excellent work of [emoji-encoder](https://github.com/paulgb/emoji-encoder))
 ---
