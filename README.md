@@ -45,7 +45,7 @@
 
   * *1-Click* – fastest path: pick a single emoji/letter carrier.
   * *Free Form* – distribute bytes across any text/emoji string you supply.
-* **Live beta scanner** – optional DOM observer that flags hidden payloads on any site.
+* **Enhanced multi-encoding detection** – beta scanner detects 5+ encoding schemes (32-VS, 16-VS, ZW-SPACE, ZWJ-BINARY, auto-learned) with confidence validation and mapping identification.
 * **Zero-dependency UI** – pure vanilla JS + CSS, SPA-safe (React, Vue, etc.).
 * **Robust UTF-8 path** – custom byte encoder/decoder to bypass Firefox XRay quirks.
 
@@ -57,24 +57,10 @@
 | ---------------- | ------------------------- | --------------------------------- |
 | **Encode modal** | `Ctrl + Shift + F`        | anywhere                          |
 | **Decode modal** | `Ctrl + Shift + V`        | anywhere (uses selection, if any) |
-| **Quick decode** | double-click encoded blob | highlights + opens modal          |
 | **Close modal**  | `Esc`                     | inside modal                      |
 
 ---
 
-## 🛠 Installation (detailed)
-
-```bash
-# 1. Install the Tampermonkey extension for your browser
-# 2. Pull the script
-curl -O https://raw.githubusercontent.com/your-repo/hidden-message/main/hidden-message.user.js
-# 3. In Tampermonkey Dashboard → Utilities → "Import from file" → select the downloaded file
-# 4. Click Save
-```
-
-The metadata block already matches `@match *://*/*`, so the script is active everywhere.
-
----
 
 ## 🗺 Usage Guide
 
@@ -98,14 +84,38 @@ The metadata block already matches `@match *://*/*`, so the script is active eve
   2. Type secret → type or click emojis to build your custom carrier string
   3. **Encode Message** → copy.
 
-### Beta Scanner
+### Beta Scanner (Enhanced Multi-Encoding Detection)
 
-Flip the **🧪 “Highlight encoded text on page”** toggle in any modal.
-The observer will:
+Flip the **🧪 "Highlight encoded text on page"** toggle in any modal.
+The enhanced observer will:
 
-* mark encoded nodes with a dashed yellow outline,
-* reveal the decoded payload on hover,
-* stay active across SPA navigations.
+* **Detect multiple encoding schemes**:
+  - **32-VS**: Original Paul Butler method (0xFE00-0xFE0F, 0xE0100-0xE01EF)
+  - **16-VS**: 4-bit nibble encoders using basic variation selectors
+  - **ZW-SPACE**: Binary encoding with Zero Width Space (0x200B=1) / ZWNJ (0x200C=0)
+  - **ZWJ-BINARY**: Binary encoding with Zero Width Joiner (0x200D=1) / ZWNJ (0x200C=0)
+  - **Auto-learned**: Heuristic detection for unknown mapping patterns
+
+* **Smart confidence checking** – validates decoded content as printable UTF-8 (≥75% readable)
+* **Enhanced tooltips** showing:
+  - Decoded message
+  - Encoding type (e.g., "mapping: 32-VS" or "mapping: unknown")
+  - **Copy raw selectors** button for unknown mappings (exports Unicode codepoints for external analysis)
+
+* **Visual indicators** – mark encoded nodes with dashed yellow outline
+* **Cross-SPA compatibility** – stays active across React/Vue navigations
+* **Backward compatibility** – tries legacy methods first, then cascade detection
+
+**Example tooltip output:**
+```
+Decoded: Hello World!
+mapping: 32-VS
+
+[📋 copy raw selectors]  // Only for unknown mappings
+```
+
+For unknown encodings, the raw selector button copies Unicode codepoints like:
+`U+FE00 U+FE01 U+E0100` for advanced reverse engineering.
 
 ---
 
@@ -149,5 +159,3 @@ PRs welcome! Please include:
 [@aporeticaxis](https://x.com/aporeticaxis) – stay safe, share responsibly.
 
 > **Disclaimer:** Use steganography ethically. You are accountable for any content you conceal.
-
-```
