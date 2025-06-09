@@ -2,11 +2,13 @@
 // @name         Demojify - Hidden Message Encoder/Decoder (Enhanced Emoji/Text)
 // @namespace    http://tampermonkey.net/
 // @version      2025-06-07.11
-// @description  Hide messages in emojis or text using advanced steganography. Encode (Ctrl+Shift+X) / Decode (Ctrl+Shift+V) or click the 🕵️ button.
+// @description  Hide messages in emojis or text using advanced steganography. Encode (Ctrl+Shift+F) / Decode (Ctrl+Shift+V) or click the 🕵️ button.
 // @author       @aporeticaxis [extending the work of https://github.com/paulgb/emoji-encoder]
 // @match        *://*/*
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
+// @grant        GM_getResourceText
+// @resource     EMOJIDATA https://cdn.jsdelivr.net/npm/emoji-datasource/emoji.json
 // @downloadURL https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js
 // @updateURL   https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js
 // ==/UserScript==
@@ -37,8 +39,6 @@
       return null;
     };
 
-    const visibleOnly = (txt) =>
-      [...txt].filter((c) => fromVS(c.codePointAt(0)) === null).join('');
 
     // Safe text encoding for userscripts (avoids TypedArray/Xrays issues)
     const encodeMessage = (carrier, hidden) => {
@@ -164,7 +164,780 @@
       }
     };
 
-    /* ---------- 2. Enhanced Encoding System ---------- */
+    /* ---------- 2. Floating Emoji Picker System (Chat-App Style) ---------- */
+    const FloatingEmojiPicker = (() => {
+      // Skin tone unicode suffixes matching emoji-picker-react
+      const SkinTones = {
+        NEUTRAL: 'neutral',
+        LIGHT: '1f3fb',
+        MEDIUM_LIGHT: '1f3fc',
+        MEDIUM: '1f3fd',
+        MEDIUM_DARK: '1f3fe',
+        DARK: '1f3ff'
+      };
+
+      let allEmojis = [];
+      let recents = [];
+      let stats = {};
+      let currentSkinTone = SkinTones.NEUTRAL;
+      let currentOpenPicker = null; // XOR logic - only one picker open at a time
+
+      // Load emoji data from official emoji-datasource
+      function loadData() {
+        try {
+          const raw = GM_getResourceText('EMOJIDATA');
+          const data = JSON.parse(raw);
+          allEmojis = data
+            .map(e => {
+              const cps = e.unified.split('-').map(u => parseInt(u, 16));
+              const variations = e.skin_variations ? Object.keys(e.skin_variations).map(skinKey => {
+                const skinData = e.skin_variations[skinKey];
+                return skinData.unified;
+              }) : [];
+
+              return {
+                char: String.fromCodePoint(...cps),
+                name: e.name || (e.short_names && e.short_names[0]) || '',
+                category: e.category || 'Uncategorized',
+                unified: e.unified,
+                variations: variations,
+                hasVariations: variations.length > 0
+              };
+            });
+        } catch (err) {
+          console.error('Emoji data load failed:', err);
+          // Fallback to basic emojis if loading fails
+          allEmojis = EMOJIS.map(char => ({char, name: char, category: 'Smileys & Emotion', hasVariations: false}));
+        }
+
+        recents = JSON.parse(localStorage.getItem('demojifyEmojiRecent') || '[]');
+        stats = JSON.parse(localStorage.getItem('demojifyEmojiStats') || '{}');
+        currentSkinTone = localStorage.getItem('demojifyCurrentSkinTone') || SkinTones.NEUTRAL;
+      }
+
+      function recordUsage(emoji) {
+        stats[emoji] = (stats[emoji] || 0) + 1;
+        localStorage.setItem('demojifyEmojiStats', JSON.stringify(stats));
+      }
+
+      function saveRecent(emoji) {
+        recents = [emoji, ...recents.filter(x => x !== emoji)];
+        if (recents.length > 50) recents.pop();
+        localStorage.setItem('demojifyEmojiRecent', JSON.stringify(recents));
+      }
+
+      function getEmojisByCategory(category) {
+        switch(category) {
+          case 'Recent':
+            // Show individual variants instead of collapsing them
+            return recents.map(char => {
+              // Find the original emoji data to check for variations
+              const originalEmoji = allEmojis.find(e =>
+                e.char === char ||
+                (e.hasVariations && getSkinToneVariationsForBase(e).includes(char))
+              );
+
+              return {
+                char,
+                name: originalEmoji ? originalEmoji.name : char,
+                hasVariations: originalEmoji ? originalEmoji.hasVariations : true, // Force true to enable variation popup
+                unified: originalEmoji ? originalEmoji.unified : '',
+                variations: originalEmoji ? originalEmoji.variations : []
+              };
+            });
+          case 'Frequent':
+            return Object.entries(stats)
+              .sort((a,b) => b[1] - a[1])
+              .map(([char]) => {
+                const originalEmoji = allEmojis.find(e =>
+                  e.char === char ||
+                  (e.hasVariations && getSkinToneVariations(e).includes(char))
+                );
+
+                return {
+                  char,
+                  name: originalEmoji ? originalEmoji.name : char,
+                  hasVariations: originalEmoji ? originalEmoji.hasVariations : false,
+                  unified: originalEmoji ? originalEmoji.unified : '',
+                  variations: originalEmoji ? originalEmoji.variations : []
+                };
+              });
+          default:
+            // Return ALL emojis for the category, not just 40
+            return allEmojis.filter(e => e.category === category);
+        }
+      }
+
+      function getCategories() {
+        const categories = ['Recent'];
+        const dataCategories = [...new Set(allEmojis.map(e => e.category))]
+          .filter(cat => {
+            // Only include categories that have emojis AND have a defined icon
+            const emojis = allEmojis.filter(e => e.category === cat);
+            const icon = getCategoryIcon(cat);
+            return emojis.length > 0 && icon;
+          });
+        return categories.concat(dataCategories.sort());
+      }
+
+      function searchEmojis(query) {
+        if (!query.trim()) return [];
+        const q = query.toLowerCase();
+        return allEmojis.filter(e =>
+          e.name.toLowerCase().includes(q) ||
+          e.char.includes(q)
+        ).slice(0, 40);
+      }
+
+      // Create floating emoji picker
+      function createPicker(targetInput, triggerButton) {
+        // Close any existing picker (XOR logic)
+        if (currentOpenPicker) {
+          currentOpenPicker.remove();
+          currentOpenPicker = null;
+        }
+
+        const picker = document.createElement('div');
+        picker.className = 'floating-emoji-picker';
+
+        const categories = getCategories();
+        let activeCategory = categories[0];
+
+        picker.innerHTML = `
+          <div class="emoji-picker-header">
+            <input type="text" class="emoji-search" placeholder="Search emojis..." />
+            <div class="emoji-skin-tones">
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.NEUTRAL ? 'active' : ''}" data-skin="${SkinTones.NEUTRAL}" title="Default">✋</button>
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.LIGHT ? 'active' : ''}" data-skin="${SkinTones.LIGHT}" title="Light">✋🏻</button>
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.MEDIUM_LIGHT ? 'active' : ''}" data-skin="${SkinTones.MEDIUM_LIGHT}" title="Medium Light">✋🏼</button>
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.MEDIUM ? 'active' : ''}" data-skin="${SkinTones.MEDIUM}" title="Medium">✋🏽</button>
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.MEDIUM_DARK ? 'active' : ''}" data-skin="${SkinTones.MEDIUM_DARK}" title="Medium Dark">✋🏾</button>
+              <button class="skin-tone-btn ${currentSkinTone === SkinTones.DARK ? 'active' : ''}" data-skin="${SkinTones.DARK}" title="Dark">✋🏿</button>
+            </div>
+          </div>
+          <div class="emoji-categories">
+            ${categories.map(cat => {
+              const icon = getCategoryIcon(cat);
+              const clearBtn = cat === 'Recent' ? '<span class="clear-recents-btn" title="Clear recent emojis">🗑️</span>' : '';
+              return `<button class="emoji-category-tab ${cat === activeCategory ? 'active' : ''}" data-category="${cat}">${icon}${clearBtn}</button>`;
+            }).join('')}
+          </div>
+          <div class="emoji-grid"></div>
+        `;
+
+        // Position picker near trigger button
+        document.body.appendChild(picker);
+        positionPicker(picker, triggerButton);
+
+        // Setup event handlers
+        const searchInput = picker.querySelector('.emoji-search');
+        const grid = picker.querySelector('.emoji-grid');
+        const categoryTabs = picker.querySelectorAll('.emoji-category-tab');
+        const skinToneBtns = picker.querySelectorAll('.skin-tone-btn');
+
+        // Skin tone selection
+        skinToneBtns.forEach(btn => {
+          btn.onclick = () => {
+            currentSkinTone = btn.dataset.skin;
+            localStorage.setItem('demojifyCurrentSkinTone', currentSkinTone);
+
+            // Update active state
+            skinToneBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Re-render emojis with new skin tone
+            const query = searchInput.value.trim();
+            if (query) {
+              renderEmojis(grid, searchEmojis(query), targetInput, picker);
+            } else {
+              renderEmojis(grid, getEmojisByCategory(activeCategory), targetInput, picker);
+            }
+          };
+        });
+
+        // Search functionality
+        searchInput.oninput = () => {
+          const query = searchInput.value.trim();
+          if (query) {
+            renderEmojis(grid, searchEmojis(query), targetInput, picker);
+          } else {
+            renderEmojis(grid, getEmojisByCategory(activeCategory), targetInput, picker);
+          }
+        };
+
+        // Category tabs and clear button
+        categoryTabs.forEach(tab => {
+          tab.onclick = (e) => {
+            // Handle clear button click for Recent tab
+            if (e.target.classList.contains('clear-recents-btn')) {
+              e.stopPropagation();
+              // Clear recents data
+              recents = [];
+              localStorage.setItem('demojifyEmojiRecent', '[]');
+              // Re-render the grid
+              renderEmojis(grid, getEmojisByCategory(activeCategory), targetInput, picker);
+              return;
+            }
+
+            activeCategory = tab.dataset.category;
+            categoryTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            searchInput.value = '';
+            renderEmojis(grid, getEmojisByCategory(activeCategory), targetInput, picker);
+          };
+        });
+
+        // Initial render
+        renderEmojis(grid, getEmojisByCategory(activeCategory), targetInput, picker);
+
+        // Click outside to close - set up persistent event listener
+        const handleOutsideClick = (e) => {
+          if (!picker.contains(e.target) && e.target !== triggerButton) {
+            closePicker();
+          }
+        };
+
+        // Store the handler for cleanup
+        picker._outsideClickHandler = handleOutsideClick;
+
+        setTimeout(() => {
+          document.addEventListener('click', handleOutsideClick);
+        }, 100);
+
+        currentOpenPicker = picker;
+        return picker;
+      }
+
+      function renderEmojis(grid, emojis, targetInput, picker) {
+        grid.innerHTML = '';
+
+        emojis.forEach(emoji => {
+          const button = document.createElement('button');
+          button.className = 'emoji-item';
+
+          // Always display the neutral/base emoji in the grid, regardless of global skin tone
+          button.textContent = emoji.char;
+          // Removed title to avoid annoying hover text
+
+          // Add variation indicator if emoji has skin tones
+          if (emoji.hasVariations) {
+            button.classList.add('has-variations');
+            setupSkinTonePopup(button, emoji, targetInput, picker);
+          }
+
+          button.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Apply global skin tone if available for this emoji (only when adding to input)
+            const finalEmoji = getEmojiWithSkinTone(emoji);
+            targetInput.value += finalEmoji;
+            targetInput.dispatchEvent(new Event('input')); // Trigger any input handlers
+            recordUsage(finalEmoji);
+            saveRecent(finalEmoji);
+
+            // Hide any variation popups immediately for normal clicks
+            if (button._cleanupSkinTonePopup) {
+              button._cleanupSkinTonePopup();
+            }
+
+            // Don't close picker - allow multiple selections
+          };
+
+          grid.appendChild(button);
+        });
+      }
+
+      function positionPicker(picker, triggerButton) {
+        const triggerRect = triggerButton.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Default position: below and to the right of trigger
+        let left = triggerRect.right + 5;
+        let top = triggerRect.top;
+
+        // Adjust if picker would go off-screen
+        const pickerWidth = 320;
+        const pickerHeight = 400;
+
+        if (left + pickerWidth > viewportWidth - 10) {
+          left = triggerRect.left - pickerWidth - 5; // Show to the left instead
+        }
+
+        if (top + pickerHeight > viewportHeight - 10) {
+          top = viewportHeight - pickerHeight - 10; // Move up
+        }
+
+        if (left < 10) left = 10;
+        if (top < 10) top = 10;
+
+        picker.style.left = left + 'px';
+        picker.style.top = top + 'px';
+      }
+
+      function getCategoryIcon(category) {
+        const icons = {
+          'Recent': '🕐',
+          'Smileys & Emotion': '😊',
+          'People & Body': '👋',
+          'Animals & Nature': '🐶',
+          'Food & Drink': '🍎',
+          'Travel & Places': '🚗',
+          'Activities': '⚽',
+          'Objects': '💡',
+          'Symbols': '❤️',
+          'Flags': '🏳️'
+        };
+        return icons[category]; // No fallback - only show categories we have icons for
+      }
+
+      function getEmojiWithSkinTone(emoji) {
+        // Only apply global skin tone if it's NOT neutral and emoji has variations
+        if (!emoji.hasVariations || currentSkinTone === SkinTones.NEUTRAL) {
+          return emoji.char;
+        }
+
+        // Get all variations for this emoji using the same logic as the popup
+        const variations = getSkinToneVariations(emoji);
+
+        // Find the variation that matches the current skin tone
+        // The variations array is [neutral, light, medium-light, medium, medium-dark, dark]
+        // We need to map the currentSkinTone to the correct index
+        let targetIndex = 0; // Default to neutral
+
+        switch (currentSkinTone) {
+          case SkinTones.LIGHT:
+            targetIndex = 1;
+            break;
+          case SkinTones.MEDIUM_LIGHT:
+            targetIndex = 2;
+            break;
+          case SkinTones.MEDIUM:
+            targetIndex = 3;
+            break;
+          case SkinTones.MEDIUM_DARK:
+            targetIndex = 4;
+            break;
+          case SkinTones.DARK:
+            targetIndex = 5;
+            break;
+          default:
+            targetIndex = 0; // neutral
+        }
+
+        // Return the variation at the target index, or fallback to neutral
+        if (variations.length > targetIndex) {
+          return variations[targetIndex];
+        }
+
+        // Fallback to neutral if skin tone not found
+        return emoji.char;
+      }
+
+      function getSkinToneVariations(emoji) {
+        // For Recent tab items that might be skin-toned variants, find the original emoji
+        let baseEmoji = emoji;
+        if (!emoji.hasVariations && emoji.char) {
+          // This might be a skin-toned variant from recents - find the base emoji
+          const foundBase = allEmojis.find(e =>
+            e.hasVariations && getSkinToneVariationsForBase(e).includes(emoji.char)
+          );
+          if (foundBase) {
+            baseEmoji = foundBase;
+          }
+        }
+
+        const variations = [];
+
+        // Always start with the neutral version (yellow hand)
+        if (baseEmoji.unified) {
+          const neutralCps = baseEmoji.unified.split('-').map(u => parseInt(u, 16));
+          const neutralChar = String.fromCodePoint(...neutralCps);
+          variations.push(neutralChar);
+        } else {
+          // Fallback for items without unified data
+          variations.push(baseEmoji.char);
+        }
+
+        // Add skin tone variations
+        if (baseEmoji.hasVariations && baseEmoji.variations) {
+          baseEmoji.variations.forEach(variation => {
+            const cps = variation.split('-').map(u => parseInt(u, 16));
+            const variantChar = String.fromCodePoint(...cps);
+            // Don't duplicate the neutral version
+            if (!variations.includes(variantChar)) {
+              variations.push(variantChar);
+            }
+          });
+        }
+
+        return variations;
+      }
+
+      // Helper function for finding variations of a base emoji
+      function getSkinToneVariationsForBase(baseEmoji) {
+        const variations = [];
+
+        // Add neutral version
+        if (baseEmoji.unified) {
+          const neutralCps = baseEmoji.unified.split('-').map(u => parseInt(u, 16));
+          variations.push(String.fromCodePoint(...neutralCps));
+        } else {
+          variations.push(baseEmoji.char);
+        }
+
+        // Add skin tone variations
+        if (baseEmoji.hasVariations && baseEmoji.variations) {
+          baseEmoji.variations.forEach(variation => {
+            const cps = variation.split('-').map(u => parseInt(u, 16));
+            variations.push(String.fromCodePoint(...cps));
+          });
+        }
+
+        return variations;
+      }
+
+      function setupSkinTonePopup(button, emoji, targetInput, picker) {
+        let holdTimer = null;
+        let hoverTimer = null;
+        let variationPopup = null;
+        let isHolding = false;
+        let isDragging = false;
+        let mouseDown = false;
+
+        // Start hold timer on mouse/touch down
+        function startHold(e) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          mouseDown = true;
+          isHolding = false;
+          isDragging = false;
+
+          holdTimer = setTimeout(() => {
+            if (mouseDown) { // Only show if still holding down
+              isHolding = true;
+              showVariationPopup();
+            }
+          }, 500); // 500ms hold time
+        }
+
+        // Handle mouse/touch up - either quick click or complete hold
+        function endHold(e) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          mouseDown = false;
+
+          if (holdTimer) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+
+          // If we were holding and have a popup, check if we're over a variation button
+          if (isHolding && variationPopup) {
+            const elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+            const varButton = elementUnder?.closest('.skin-tone-variation-popup button');
+            if (varButton) {
+              // Trigger the click on the variation button we're over
+              varButton.click();
+              hideVariationPopup();
+              isHolding = false;
+              isDragging = false;
+              return; // Don't proceed with normal click
+            }
+            // If holding but not over a variation, hide popup and don't trigger normal click
+            hideVariationPopup();
+            isHolding = false;
+            isDragging = false;
+            return;
+          }
+
+          // For quick clicks (not holding), hide any popup and let normal click proceed
+          if (!isHolding) {
+            hideVariationPopup();
+            // Normal click will be handled by the button's onclick handler
+          }
+
+          isHolding = false;
+          isDragging = false;
+        }
+
+        // Start hover timer for hover behavior
+        function startHover(e) {
+          if (isHolding || mouseDown) return; // Don't show on hover if already holding or mouse down
+
+          hoverTimer = setTimeout(() => {
+            if (!mouseDown && !isHolding) { // Only show if not in a click/hold sequence
+              showVariationPopup();
+            }
+          }, 300); // 300ms hover delay
+        }
+
+        // Cancel hold on mouse/touch leave
+        function cancelHold() {
+          mouseDown = false;
+
+          if (holdTimer) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+          if (hoverTimer) {
+            clearTimeout(hoverTimer);
+            hoverTimer = null;
+          }
+
+          // Don't immediately hide popup if we're in a hold state
+          if (!isHolding) {
+            // Hide popup after a short delay when leaving the button (unless over popup)
+            setTimeout(() => {
+              if (variationPopup && !variationPopup.matches(':hover') && !mouseDown) {
+                hideVariationPopup();
+              }
+            }, 200);
+          }
+        }
+
+        // Handle mouse leave from variation popup
+        function handlePopupMouseLeave() {
+          setTimeout(() => {
+            if (variationPopup && !variationPopup.matches(':hover') && !button.matches(':hover')) {
+              hideVariationPopup();
+            }
+          }, 200);
+        }
+
+        // Show variation popup
+        function showVariationPopup() {
+          hideVariationPopup(); // Remove any existing popup
+
+          const variations = getSkinToneVariations(emoji);
+          if (variations.length <= 1) return; // No variations to show
+
+          // Create variation popup
+          variationPopup = document.createElement('div');
+          variationPopup.className = 'skin-tone-variation-popup';
+          variationPopup.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 2147483650;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.15s ease-out;
+          `;
+
+          // Add variation buttons
+          variations.forEach((variation, index) => {
+            const varButton = document.createElement('button');
+            varButton.style.cssText = `
+              width: 32px;
+              height: 32px;
+              border: 1px solid #ddd;
+              background: white;
+              border-radius: 6px;
+              font-size: 20px;
+              cursor: pointer;
+              transition: all 0.2s;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            `;
+            varButton.textContent = variation;
+            varButton.title = `${emoji.name} - skin tone ${index}`;
+
+            varButton.onmouseenter = () => {
+              varButton.style.borderColor = '#e91e63';
+              varButton.style.transform = 'scale(1.1)';
+            };
+
+            varButton.onmouseleave = () => {
+              varButton.style.borderColor = '#ddd';
+              varButton.style.transform = 'scale(1)';
+            };
+
+            varButton.onclick = (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+
+              targetInput.value += variation;
+              targetInput.dispatchEvent(new Event('input'));
+              recordUsage(variation);
+              saveRecent(variation);
+
+              // Update current skin tone based on selection
+              if (index > 0 && emoji.variations[index - 1]) {
+                const skinToneFromVariation = emoji.variations[index - 1].split('-').find(part =>
+                  Object.values(SkinTones).includes(part)
+                );
+                if (skinToneFromVariation) {
+                  setSkinTone(skinToneFromVariation);
+                }
+              } else if (index === 0) {
+                setSkinTone(SkinTones.NEUTRAL);
+              }
+
+              // Immediately hide the variation popup with forced cleanup
+              setTimeout(() => hideVariationPopup(), 0);
+            };
+
+            variationPopup.appendChild(varButton);
+          });
+
+          // Position popup
+          document.body.appendChild(variationPopup);
+          positionVariationPopup();
+
+          // Show with animation
+          requestAnimationFrame(() => {
+            variationPopup.style.opacity = '1';
+            variationPopup.style.transform = 'scale(1)';
+          });
+
+          // Add mouse leave handler to popup
+          variationPopup.addEventListener('mouseleave', handlePopupMouseLeave);
+
+          // Click outside to close
+          document.addEventListener('click', handleOutsideClick, true);
+        }
+
+        // Position variation popup relative to the emoji button
+        function positionVariationPopup() {
+          if (!variationPopup) return;
+
+          // Check if button still exists and is attached to DOM
+          if (!button.isConnected) {
+            hideVariationPopup();
+            return;
+          }
+
+          const buttonRect = button.getBoundingClientRect();
+
+          // If button has no dimensions (not visible), hide popup
+          if (buttonRect.width === 0 || buttonRect.height === 0) {
+            hideVariationPopup();
+            return;
+          }
+
+          // Force a reflow to get accurate popup dimensions
+          variationPopup.style.visibility = 'hidden';
+          variationPopup.style.display = 'flex';
+          const popupRect = variationPopup.getBoundingClientRect();
+          variationPopup.style.visibility = '';
+
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          // Default: center above the button
+          let left = buttonRect.left + (buttonRect.width / 2) - (popupRect.width / 2);
+          let top = buttonRect.top - popupRect.height - 10;
+
+          // Adjust if it would go off-screen horizontally
+          if (left < 10) {
+            left = 10;
+          } else if (left + popupRect.width > viewportWidth - 10) {
+            left = viewportWidth - popupRect.width - 10;
+          }
+
+          // If it would go off-screen vertically, show below instead
+          if (top < 10) {
+            top = buttonRect.bottom + 10;
+          }
+
+          // Ensure we have valid coordinates
+          if (isNaN(left) || isNaN(top) || left < 0 || top < 0) {
+            console.warn('[HiddenMsg] Invalid popup coordinates, hiding popup');
+            hideVariationPopup();
+            return;
+          }
+
+          variationPopup.style.left = left + 'px';
+          variationPopup.style.top = top + 'px';
+        }
+
+        // Hide variation popup
+        function hideVariationPopup() {
+          if (variationPopup) {
+            variationPopup.removeEventListener('mouseleave', handlePopupMouseLeave);
+            variationPopup.remove();
+            variationPopup = null;
+            document.removeEventListener('click', handleOutsideClick, true);
+          }
+        }
+
+        // Handle clicks outside the variation popup
+        function handleOutsideClick(e) {
+          if (!variationPopup?.contains(e.target) && !button.contains(e.target)) {
+            hideVariationPopup();
+          }
+        }
+
+        // Set up event listeners for hover/hold behavior
+        button.addEventListener('mousedown', startHold);
+        button.addEventListener('mouseup', endHold);
+        button.addEventListener('mouseenter', startHover);
+        button.addEventListener('mouseleave', cancelHold);
+        button.addEventListener('touchstart', startHold, { passive: false });
+        button.addEventListener('touchend', endHold, { passive: false });
+        button.addEventListener('touchcancel', cancelHold);
+
+        // Store cleanup function
+        button._cleanupSkinTonePopup = () => {
+          if (holdTimer) {
+            clearTimeout(holdTimer);
+          }
+          hideVariationPopup();
+          button.removeEventListener('mousedown', startHold);
+          button.removeEventListener('mouseup', endHold);
+          button.removeEventListener('mouseleave', cancelHold);
+          button.removeEventListener('touchstart', startHold);
+          button.removeEventListener('touchend', endHold);
+          button.removeEventListener('touchcancel', cancelHold);
+        };
+      }
+
+      function setSkinTone(skinTone) {
+        currentSkinTone = skinTone;
+        localStorage.setItem('demojifyCurrentSkinTone', currentSkinTone);
+      }
+
+      function closePicker() {
+        if (currentOpenPicker) {
+          // Clean up the outside click event listener
+          if (currentOpenPicker._outsideClickHandler) {
+            document.removeEventListener('click', currentOpenPicker._outsideClickHandler);
+          }
+          currentOpenPicker.remove();
+          currentOpenPicker = null;
+        }
+      }
+
+      // Initialize emoji data
+      loadData();
+
+      return {
+        createPicker,
+        closePicker,
+        isOpen: () => !!currentOpenPicker,
+        getCategories,
+        getEmojisByCategory,
+        searchEmojis,
+        recordUsage,
+        saveRecent,
+        getEmojiWithSkinTone,
+        getSkinToneVariations,
+        setSkinTone,
+        SkinTones
+      };
+    })();
+
+    // Enhanced encoding that preserves custom carrier format (safe for userscripts)
     const EMOJIS = ['😊','😍','🥳','😎','🤖','👋','🎉','🔥','💯','⭐','🌟','💎','🚀','💪','👍','❤️','💖','🌈','🦄','🎈','🎊','🌺','🌸','🌻','🌷','🍀','🌙','☀️','⚡','✨','🎯','🏆','🎪','🎭','🎨','🎵','🎶','🎸','🎤','📱','💻','⌚','🎮','📷','🔮','💡','🔑','⚽','🏀','🎾','⚾'];
 
     const ALPHABET = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
@@ -383,7 +1156,7 @@
       .hidden-msg-decode-result.no-message{background:#fff3cd;border-color:#ffeaa7;color:#8d6e63;word-wrap:break-word;word-break:break-word;white-space:pre-wrap;overflow-wrap:break-word}
 
       .hidden-msg-highlight{position:relative;background:rgba(255,235,59,0.3);border:2px dashed #ffc107;border-radius:4px;cursor:pointer;display:inline;padding:2px 4px;margin:0 2px}
-      
+
       /* Completely disable CSS tooltip - we'll use JavaScript only */
       .hidden-msg-highlight::after{display:none !important}
 
@@ -410,6 +1183,56 @@
       .hidden-msg-emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:8px}
       .hidden-msg-emoji-item{width:40px;height:40px;border:1px solid #ddd;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;font-size:18px;background:white}
       .hidden-msg-emoji-item:hover{border-color:#e91e63;background:#f8f8f8;transform:scale(1.05)}
+
+      /* Skin tone variation support */
+      .hidden-msg-emoji-has-variations{position:relative}
+      .hidden-msg-emoji-has-variations::after{content:'';position:absolute;bottom:1px;right:0px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:4px solid #666;transform:rotate(135deg);z-index:1}
+      .hidden-msg-emoji-has-variations:hover::after{border-bottom-color:#e91e63}
+
+      .hidden-msg-variation-picker{position:absolute;padding:5px;box-shadow:0px 2px 8px rgba(0,0,0,0.3);border-radius:8px;display:flex;align-items:center;justify-content:space-around;opacity:0;visibility:hidden;pointer-events:none;background:white;border:1px solid #ddd;z-index:2147483649;transform:scale(0.9);transition:all 0.15s ease-out;min-width:240px;height:50px}
+      .hidden-msg-variation-picker.visible{opacity:1;visibility:visible;pointer-events:all;transform:scale(1)}
+      .hidden-msg-variation-picker .hidden-msg-emoji-item{margin:0 2px;border:1px solid #ddd}
+      .hidden-msg-variation-picker .hidden-msg-emoji-item:hover{border-color:#e91e63;transform:scale(1.1)}
+
+      .hidden-msg-variation-pointer{position:absolute;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid white;bottom:-8px;left:50%;transform:translateX(-50%);z-index:2147483650}
+      .hidden-msg-variation-pointer::before{content:'';position:absolute;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid #ddd;bottom:1px;left:-9px}
+
+      /* Floating Emoji Picker (Chat-App Style) */
+      .emoji-trigger-button{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;background:#f0f0f0;border:1px solid #ddd;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:#666;transition:all 0.2s ease;z-index:10}
+      .emoji-trigger-button:hover{background:#e91e63;color:white;transform:translateY(-50%) scale(1.1)}
+
+      .floating-emoji-picker{position:fixed;width:420px;height:450px;background:white;border:1px solid #ddd;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:2147483649;display:flex;flex-direction:column;overflow:hidden}
+
+      .emoji-picker-header{padding:12px;border-bottom:1px solid #eee}
+      .emoji-search{width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:20px;font-size:14px;outline:none;margin-bottom:8px}
+      .emoji-search:focus{border-color:#e91e63}
+
+      .emoji-skin-tones{display:flex;gap:4px;justify-content:center}
+      .skin-tone-btn{background:white;border:1px solid #ddd;border-radius:4px;padding:4px;cursor:pointer;font-size:16px;transition:all 0.2s}
+      .skin-tone-btn:hover{border-color:#e91e63;background:#f5f5f5}
+      .skin-tone-btn.active{border-color:#e91e63;background:#e91e63;color:white}
+
+      .emoji-categories{display:flex;padding:8px 12px;gap:4px;border-bottom:1px solid #eee;flex-wrap:wrap;justify-content:flex-start}
+      .emoji-category-tab{padding:6px 8px;border:1px solid #ddd;background:white;border-radius:6px;font-size:16px;cursor:pointer;transition:all 0.2s;white-space:nowrap;min-width:32px;text-align:center;flex-shrink:0;position:relative}
+      .emoji-category-tab:hover{background:#f5f5f5}
+      .emoji-category-tab.active{background:#e91e63;color:white;border-color:#e91e63}
+
+      .clear-recents-btn{position:absolute;top:-4px;right:-4px;background:#ff4757;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid white;transition:all 0.2s}
+      .clear-recents-btn:hover{background:#ff3838;transform:scale(1.1)}
+
+      .emoji-grid{flex:1;padding:12px;overflow-y:auto;display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+      .emoji-item{width:32px;height:32px;border:none;background:none;font-size:20px;cursor:pointer;border-radius:6px;transition:all 0.2s;display:flex;align-items:center;justify-content:center}
+      .emoji-item:hover{background:#f0f0f0;transform:scale(1.2)}
+      .emoji-item.has-variations{position:relative}
+      .emoji-item.has-variations::after{content:'';position:absolute;bottom:1px;right:1px;width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-bottom:3px solid #666;transform:rotate(135deg)}
+
+      /* Input field positioning for emoji buttons */
+      .hidden-msg-input-wrapper{position:relative;display:inline-block;width:100%}
+      .hidden-msg-input-wrapper .hidden-msg-input{padding-right:40px}
+
+      /* Visual screener status indicator */
+      .screener-status-indicator{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(255,193,7,0.9);color:#333;padding:8px 16px;border-radius:20px;font-size:14px;font-weight:500;z-index:2147483647;opacity:0;transition:all 0.3s ease;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+      .screener-status-indicator.show{opacity:1}
     `);
 
     /* ---------- 4. Enhanced Modal System ---------- */
@@ -477,10 +1300,7 @@
                 <!-- Free Form Tab (Manual encoding) -->
                 <div class="hidden-msg-tab-content" id="tab-free-form" style="display:none">
                   <div class="hidden-msg-section-title">Custom Carriers</div>
-                  <input type="text" class="hidden-msg-input" placeholder="Type or click emojis to add carriers like 'hello world' or '🎄🎅🤶'" id="custom-carriers" style="min-height:40px;margin-bottom:16px">
-
-                  <div class="hidden-msg-section-title">Choose Any Emoji to Add</div>
-                  <div class="hidden-msg-emoji-selector" id="emoji-selector"></div>
+                  <input type="text" class="hidden-msg-input" placeholder="Type or click emojis to build your carrier message" id="custom-carriers" style="min-height:40px;margin-bottom:16px">
 
                   <button class="hidden-msg-paste-btn" id="encode-btn">🔮 Encode Message</button>
 
@@ -494,7 +1314,8 @@
           </div>
 
           <div class="hidden-msg-footer">
-            <a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Source on GitHub</a>
+            <p><a href="https://github.com/aporeticaxis/demojify/" class="hidden-msg-link" target="_blank">Source on GitHub</a></p>
+            <p><a href="https://github.com/paulgb/emoji-encoder" class="hidden-msg-link" target="_blank">Based on the demo by paulgb</a></p>
           </div>
         </div>
       `;
@@ -516,7 +1337,6 @@
       const decodeResult = modal.querySelector('#decode-result');
       const pasteBtn = modal.querySelector('#paste-btn');
       const customCarriers = modal.querySelector('#custom-carriers');
-      const emojiSelector = modal.querySelector('#emoji-selector');
       const tabOptions = modal.querySelectorAll('.hidden-msg-tab-option');
       const tab1Click = modal.querySelector('#tab-1-click');
       const tabFreeForm = modal.querySelector('#tab-free-form');
@@ -603,8 +1423,7 @@
       setupEmojiGrid(modal);
       setupAlphabetGrid(modal);
 
-      // Setup Free Form emoji selector
-      setupFreeFormEmojiSelector(modal);
+      // Free Form tab now only uses the floating emoji picker trigger button
 
       // Setup encoding with enhanced carrier logic for both tabs
       function getAllCarriers1Click() {
@@ -735,7 +1554,7 @@
       function showDecodeResult(result) {
         decodeResult.style.display = 'block';
         decodeResult.className = 'hidden-msg-decode-result';
-        
+
         // Handle both old string format and new object format for backward compatibility
         if (typeof result === 'string') {
           decodeResult.textContent = `Hidden message: ${result}`;
@@ -800,10 +1619,6 @@
         update1ClickOutput();
       }
 
-      // Handler for Free Form emoji selector - no longer needed since we add directly to text field
-      function handleFreeFormEmojiSelection(emoji) {
-        // This function is no longer used - emojis are added directly in setupFreeFormEmojiSelector
-      }
 
       // Beta scanner functionality
       const betaScanner = modal.querySelector('#beta-scanner');
@@ -822,13 +1637,85 @@
       };
 
       modal.handle1ClickGridSelection = handle1ClickGridSelection;
-      modal.handleFreeFormEmojiSelection = handleFreeFormEmojiSelection;
+
+      // Add emoji trigger buttons to input fields (but not decode input)
+      addEmojiTriggerButtons(modal);
+    }
+
+    /* ---------- 5. Emoji Trigger Button System ---------- */
+    function addEmojiTriggerButtons(modal) {
+      // Find all input fields that should have emoji buttons (exclude decode input)
+      const inputs = [
+        modal.querySelector('#encode-input'),
+        modal.querySelector('#custom-carriers')
+      ].filter(input => input); // Remove null entries
+
+      inputs.forEach(input => {
+        // Skip if already wrapped
+        if (input.parentElement.classList.contains('hidden-msg-input-wrapper')) {
+          return;
+        }
+
+        // Create wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'hidden-msg-input-wrapper';
+
+        // Create emoji trigger button
+        const triggerButton = document.createElement('button');
+        triggerButton.className = 'emoji-trigger-button';
+        triggerButton.innerHTML = '😊';
+        triggerButton.type = 'button'; // Prevent form submission
+        triggerButton.title = 'Add emoji';
+
+        // Insert wrapper before input
+        input.parentNode.insertBefore(wrapper, input);
+
+        // Move input into wrapper and add button
+        wrapper.appendChild(input);
+        wrapper.appendChild(triggerButton);
+
+        // Add click handler for emoji picker
+        triggerButton.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Close any existing picker first (XOR logic handled in FloatingEmojiPicker)
+          FloatingEmojiPicker.createPicker(input, triggerButton);
+        };
+      });
     }
 
     /* ---------- 5. Enhanced Beta Page Scanner with Multi-Encoding Detection ---------- */
     let scannerObserver = null;
     let highlightedElements = new Set();
     let betaScannerEnabled = false; // Cache beta scanner state
+
+    // Visual screener status indicator functions
+    function showScreenerStatusIndicator(isEnabled) {
+      // Remove existing indicator
+      const existing = document.querySelector('.screener-status-indicator');
+      if (existing) existing.remove();
+
+      // Create new indicator
+      const indicator = document.createElement('div');
+      indicator.className = 'screener-status-indicator';
+      indicator.textContent = `Screener ${isEnabled ? 'ON' : 'OFF'}`;
+
+      document.body.appendChild(indicator);
+
+      // Show with animation
+      setTimeout(() => indicator.classList.add('show'), 100);
+
+      // Auto-hide after 2 seconds
+      setTimeout(() => {
+        indicator.classList.remove('show');
+        setTimeout(() => {
+          if (indicator.parentNode) {
+            indicator.remove();
+          }
+        }, 300); // Wait for fade-out transition
+      }, 2000);
+    }
 
     // Confidence checking function
     function isLikelyText(str) {
@@ -992,7 +1879,7 @@
       // Group consecutive zero-width characters
       const zwGroups = [];
       let currentGroup = [];
-      
+
       for (const cp of cps) {
         if (cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)) {
           currentGroup.push(cp);
@@ -1008,7 +1895,7 @@
       if (zwGroups.length === 0) return null;
 
       // Try to detect patterns
-      const uniqueChars = [...new Set(cps.filter(cp => 
+      const uniqueChars = [...new Set(cps.filter(cp =>
         cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)
       ))];
 
@@ -1021,15 +1908,15 @@
         });
 
         const values = cps.map(cp => charToValue[cp]).filter(v => v !== undefined);
-        
+
         // Try different interpretations
         const attempts = [];
-        
+
         // Attempt 1: Direct byte values
         if (uniqueChars.length <= 256) {
           attempts.push(values);
         }
-        
+
         // Attempt 2: Binary if exactly 2 unique chars
         if (uniqueChars.length === 2 && values.length >= 8) {
           const bytes = [];
@@ -1047,10 +1934,10 @@
         for (const attempt of attempts) {
           const text = tryUtf8(attempt);
           if (text && isLikelyText(text)) {
-            return { 
-              text: text, 
+            return {
+              text: text,
               mapping: 'auto-learned',
-              details: `${uniqueChars.length} unique chars` 
+              details: `${uniqueChars.length} unique chars`
             };
           }
         }
@@ -1110,11 +1997,13 @@
         NodeFilter.SHOW_TEXT,
         {
           acceptNode: function(node) {
-            // Skip script, style, modal content, tooltips, and already highlighted content
+            // Skip script, style, modal content, tooltips, emoji picker, and already highlighted content
             if (node.parentElement.tagName === 'SCRIPT' ||
                 node.parentElement.tagName === 'STYLE' ||
                 node.parentElement.closest('.hidden-msg-modal') ||
                 node.parentElement.closest('.hidden-msg-hover-tooltip') ||
+                node.parentElement.closest('.floating-emoji-picker') ||
+                node.parentElement.closest('.skin-tone-variation-popup') ||
                 node.parentElement.classList.contains('hidden-msg-highlight')) {
               return NodeFilter.FILTER_REJECT;
             }
@@ -1145,7 +2034,7 @@
             mapping: result.mapping,
             details: result.details
           });
-          
+
           const mapping = result.mapping || 'unknown';
           const details = result.details || '';
           highlightEncodedText(textNode, text, result.text, mapping, details);
@@ -1158,7 +2047,7 @@
       const highlight = document.createElement('span');
       highlight.className = 'hidden-msg-highlight';
       highlight.textContent = originalText;
-      
+
       // Store decoding information for tooltip
       highlight.dataset.decodedText = decodedText;
       highlight.dataset.mapping = mapping;
@@ -1175,7 +2064,7 @@
           const storedMapping = target.dataset.mapping;
           const storedDetails = target.dataset.details;
           const storedOriginalText = target.dataset.originalText;
-          
+
           showHoverTooltip(target, storedDecodedText, storedMapping, storedDetails, storedOriginalText);
         }, 100);
       });
@@ -1208,39 +2097,39 @@
 
       const tooltip = document.createElement('div');
       tooltip.className = 'hidden-msg-hover-tooltip';
-      
-      // Create tooltip content
+
+      // Create tooltip content with smart link handling
       const content = document.createElement('div');
-      content.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 4px;">Decoded: ${decodedText}</div>
-        <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
-      `;
-      
+
+      // Enhanced content with link detection and GIF rendering
+      const enhancedContent = createEnhancedTooltipContent(decodedText, mapping, details);
+      content.appendChild(enhancedContent);
+
       // Add "copy raw selectors" button for unknown mappings
       if (mapping === 'unknown' || mapping === 'auto-learned') {
         const copyBtn = document.createElement('button');
         copyBtn.innerHTML = '📋 copy raw selectors';
         copyBtn.style.cssText = `
-          background: #666; 
-          color: white; 
-          border: none; 
-          padding: 2px 6px; 
-          margin-top: 4px; 
-          border-radius: 3px; 
-          font-size: 10px; 
+          background: #666;
+          color: white;
+          border: none;
+          padding: 2px 6px;
+          margin-top: 4px;
+          border-radius: 3px;
+          font-size: 10px;
           cursor: pointer;
           display: block;
         `;
         copyBtn.onclick = (e) => {
           e.stopPropagation();
-          
+
           // Extract raw variation selectors and zero-width chars
           const rawSelectors = [...originalText]
             .map(c => c.codePointAt(0))
             .filter(cp => cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF))
             .map(cp => `U+${cp.toString(16).toUpperCase()}`)
             .join(' ');
-          
+
           navigator.clipboard.writeText(rawSelectors).then(() => {
             copyBtn.innerHTML = '✅ copied!';
             setTimeout(() => copyBtn.innerHTML = '📋 copy raw selectors', 1000);
@@ -1251,31 +2140,34 @@
         };
         content.appendChild(copyBtn);
       }
-      
+
       tooltip.appendChild(content);
       document.body.appendChild(tooltip);
 
-      // Position tooltip - ensure it's visible
+      // Position tooltip - ensure it's visible (adjusted for potentially larger content)
       const rect = element.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      
+
       // Default positioning
       let left = rect.left;
       let top = rect.bottom + 5;
-      
-      // Adjust if tooltip would go off-screen
-      if (left + 300 > viewportWidth) {
-        left = viewportWidth - 310; // Account for tooltip max-width + margin
+
+      // Adjust if tooltip would go off-screen (increased width for GIF content)
+      const estimatedTooltipWidth = enhancedContent.querySelector('.gif-container') ? 450 : 350;
+      if (left + estimatedTooltipWidth > viewportWidth) {
+        left = viewportWidth - estimatedTooltipWidth - 10;
       }
       if (left < 10) {
         left = 10;
       }
-      
-      if (top + 100 > viewportHeight) {
-        top = rect.top - 105; // Show above element instead
+
+      // Estimated height adjustment for GIF content
+      const estimatedTooltipHeight = enhancedContent.querySelector('.gif-container') ? 250 : 100;
+      if (top + estimatedTooltipHeight > viewportHeight) {
+        top = rect.top - estimatedTooltipHeight - 5; // Show above element instead
       }
-      
+
       tooltip.style.left = left + 'px';
       tooltip.style.top = top + 'px';
 
@@ -1287,12 +2179,110 @@
       window.currentTooltipElement = element;
     }
 
+    // Smart link handling for tooltip content
+    function createEnhancedTooltipContent(decodedText, mapping, details) {
+      const container = document.createElement('div');
+
+      // URL detection regex (comprehensive pattern)
+      const urlRegex = /(https?:\/\/(?:[-\w.])+(?::\d+)?(?:\/(?:[\w\/_.])*)?(?:\?[;&\w\/%=.]*)?)|(www\.(?:[-\w.])+(?::\d+)?(?:\/(?:[\w\/_.])*)?(?:\?[;&\w\/%=.]*)?)/gi;
+
+      // Check if the entire decoded text is a URL
+      const fullUrlMatch = decodedText.trim().match(/^(https?:\/\/\S+|www\.\S+)$/);
+
+      if (fullUrlMatch) {
+        const url = fullUrlMatch[1];
+        const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+
+        // Check if it's a GIF link
+        if (isGifUrl(fullUrl)) {
+          container.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 8px;">🎬 GIF Link Detected</div>
+            <div class="gif-container" style="margin-bottom: 8px; max-width: 400px; max-height: 200px; overflow: hidden; border-radius: 4px;">
+              <img src="${fullUrl}"
+                   style="max-width: 100%; max-height: 200px; width: auto; height: auto; display: block; border-radius: 4px;"
+                   onerror="this.parentElement.innerHTML='<div style=&quot;color:#ff6b6b;font-size:12px;padding:8px;&quot;>❌ Failed to load GIF<br><a href=&quot;${fullUrl}&quot; target=&quot;_blank&quot; style=&quot;color:#4fc3f7;&quot;>${truncateUrl(fullUrl)}</a></div>'"
+                   onload="console.log('[HiddenMsg] GIF loaded successfully')" />
+            </div>
+            <div style="color: #ccc; font-size: 12px;">
+              <a href="${fullUrl}" target="_blank" style="color: #4fc3f7; text-decoration: none;">${truncateUrl(fullUrl)}</a><br>
+              mapping: ${mapping}${details ? ` (${details})` : ''}
+            </div>
+          `;
+        } else {
+          // Regular link
+          container.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 4px;">🔗 Link Detected</div>
+            <div style="margin-bottom: 8px;">
+              <a href="${fullUrl}" target="_blank" style="color: #4fc3f7; text-decoration: none; font-size: 14px;">${truncateUrl(fullUrl)}</a>
+            </div>
+            <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
+          `;
+        }
+      } else {
+        // Text might contain URLs mixed with other text
+        const hasUrls = urlRegex.test(decodedText);
+
+        if (hasUrls) {
+          // Process text to make URLs clickable
+          const processedText = decodedText.replace(urlRegex, (match) => {
+            const fullUrl = match.startsWith('http') ? match : `https://${match}`;
+            return `<a href="${fullUrl}" target="_blank" style="color: #4fc3f7; text-decoration: none;">${match}</a>`;
+          });
+
+          container.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 4px;">${processedText}</div>
+            <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
+          `;
+        } else {
+          // Regular text (original behavior)
+          container.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 4px;">${decodedText}</div>
+            <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
+          `;
+        }
+      }
+
+      return container;
+    }
+
+    // Helper function to detect GIF URLs
+    function isGifUrl(url) {
+      // Check file extension
+      if (url.toLowerCase().match(/\.gif(\?.*)?$/)) {
+        return true;
+      }
+
+      // Check common GIF hosting domains
+      const gifDomains = [
+        'giphy.com',
+        'gifs.com',
+        'tenor.com',
+        'imgur.com',
+        'reddit.com',
+        'media.giphy.com',
+        'media.tenor.com'
+      ];
+
+      try {
+        const urlObj = new URL(url);
+        return gifDomains.some(domain => urlObj.hostname.includes(domain));
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // Helper function to truncate long URLs for display
+    function truncateUrl(url, maxLength = 50) {
+      if (url.length <= maxLength) return url;
+      return url.substring(0, maxLength - 3) + '...';
+    }
+
     function hideHoverTooltip() {
       if (window.currentTooltip) {
         window.currentTooltip.remove();
         window.currentTooltip = null;
       }
-      
+
       // Remove the class that hides CSS tooltip
       if (window.currentTooltipElement) {
         window.currentTooltipElement.classList.remove('has-js-tooltip');
@@ -1324,7 +2314,7 @@
       // Use enhanced cascade decoder as fallback
       const cps = [...text].map(c => c.codePointAt(0))
                            .filter(cp => cp >= 0x200B);
-      
+
       if (cps.length > 0) {
         const result = bruteDecode(cps);
         if (result) return result;
@@ -1337,11 +2327,18 @@
       const grid = modal.querySelector('#emoji-grid');
       grid.innerHTML = '';
 
-      EMOJIS.forEach(emoji => {
+      // Use basic emojis for 1-click tab
+      EMOJIS.slice(0, 25).forEach(emoji => {
         const item = document.createElement('div');
         item.className = 'hidden-msg-grid-item';
         item.textContent = emoji;
-        item.onclick = () => modal.handle1ClickGridSelection(item, emoji);
+        item.title = emoji;
+        item.onclick = () => {
+          modal.handle1ClickGridSelection(item, emoji);
+          // Record usage in floating emoji picker
+          FloatingEmojiPicker.recordUsage(emoji);
+          FloatingEmojiPicker.saveRecent(emoji);
+        };
         grid.appendChild(item);
       });
     }
@@ -1359,49 +2356,7 @@
       });
     }
 
-    function setupFreeFormEmojiSelector(modal) {
-      const selector = modal.querySelector('#emoji-selector');
-      const customCarriers = modal.querySelector('#custom-carriers');
-      const selectorGrid = document.createElement('div');
-      selectorGrid.className = 'hidden-msg-emoji-grid';
 
-      // Comprehensive emoji list with all common emojis
-      const ALL_EMOJIS = [
-        // Smileys & People
-        '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','🫠','😉','😊','😇','🥰','😍','🤩','😘','😗','☺️','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🫢','🫣','🤫','🤔','🫡','🤐','🤨','😐','😑','😶','🫥','😶‍🌫️','😏','😒','🙄','😬','😮‍💨','🤥','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','😵‍💫','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','🫤','😟','🙁','☹️','😮','😯','😲','😳','🥺','🥹','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾',
-        // Hand gestures
-        '👋','🤚','🖐️','✋','🖖','🫱','🫲','🫳','🫴','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','🫵','👍','👎','👊','✊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏',
-        // Body parts
-        '✍️','💅','🤳','💪','🦾','🦵','🦿','🦶','👂','🦻','👃','🧠','🫀','🫁','🦷','🦴','👀','👁️','👅','👄','🫦',
-        // People
-        '👶','🧒','👦','👧','🧑','👱','👨','🧔','🧔‍♂️','🧔‍♀️','👨‍🦰','👨‍🦱','👨‍🦳','👨‍🦲','👩','👩‍🦰','🧑‍🦰','👩‍🦱','🧑‍🦱','👩‍🦳','🧑‍🦳','👩‍🦲','🧑‍🦲','👱‍♀️','👱‍♂️','🧓','👴','👵',
-        // Animals & Nature
-        '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐽','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🪳','🦟','🦗','🕷️','🕸️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔',
-        // Food & Drink
-        '🍎','🍏','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫒','🌽','🥕','🫑','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','🫖','☕','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾',
-        // Activity & Sports
-        '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸️','🥌','🎿','⛷️','🏂','🪂','🏋️','🤼','🤸','⛹️','🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎵','🎶','🥁','🪘','🎷','🎺','🪗','🎸','🪕','🎻','🎲','♠️','♥️','♦️','♣️','♟️','🃏','🀄','🎴',
-        // Travel & Places
-        '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🛴','🚲','🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⚓','🪝','⛽','🚧','🚦','🚥','🗺️','🗿','🗽','🗼','🏰','🏯','🏟️','🎡','🎢','🎠','⛲','⛱️','🏖️','🏝️','🏜️','🌋','⛰️','🏔️','🗻','🏕️','⛺','🛖','🏠','🏡','🏘️','🏚️','🏗️','🏭','🏢','🏬','🏣','🏤','🏥','🏦','🏨','🏪','🏫','🏩','💒','🏛️','⛪','🕌','🛕','🕍','🕋','⛩️','🛤️','🛣️','🗾','🎑','🏞️','🌅','🌄','🌠','🎇','🎆','🌇','🌆','🏙️','🌃','🌌','🌉','🌁',
-        // Objects
-        '⌚','📱','📲','💻','⌨️','🖥️','🖨️','🖱️','🖲️','🕹️','🗜️','💽','💾','💿','📀','📼','📷','📸','📹','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🎙️','🎚️','🎛️','🧭','⏱️','⏲️','⏰','🕰️','⌛','⏳','📡','🔋','🪫','🔌','💡','🔦','🕯️','🪔','🧯','🛢️','💸','💵','💴','💶','💷','🪙','💰','💳','💎','⚖️','🪜','🧰','🔧','🔨','⚒️','🛠️','⛏️','🪚','🔩','⚙️','🪤','🧲','🔫','💣','🧨','🪓','🔪','🗡️','⚔️','🛡️','🚬','⚰️','🪦','⚱️','🏺','🔮','📿','🧿','💈','⚗️','🔭','🔬','🕳️','🩹','🩺','💊','💉','🩸','🧬','🦠','🧫','🧪','🌡️','🧹','🧺','🧻','🚽','🚰','🚿','🛁','🛀','🧼','🪥','🪒','🧴','🧷','🧹','🧽','🧯','🛒','🚬','💀',
-        // Symbols
-        '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶','🈚','🈸','🈺','🈷️','✴️','🆚','💮','🉐','㊙️','㊗️','🈴','🈵','🈹','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘','❌','⭕','🛑','⛔','📛','🚫','💯','💢','♨️','🚷','🚯','🚳','🚱','🔞','📵','🚭','❗','❕','❓','❔','‼️','⁉️','🔅','🔆','〽️','⚠️','🚸','🔱','⚜️','🔰','♻️','✅','🈯','💹','❇️','✳️','❎','🌐','💠','Ⓜ️','🌀','💤','🏧','🚾','♿','🅿️','🈳','🈂️','🛂','🛃','🛄','🛅','🚹','🚺','🚼','⚧️','🚻','🚮','🎦','📶','🈁','🔣','ℹ️','🔤','🔡','🔠','🆖','🆗','🆙','🆒','🆕','🆓','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟'
-      ];
-
-      ALL_EMOJIS.forEach(emoji => {
-        const item = document.createElement('div');
-        item.className = 'hidden-msg-emoji-item';
-        item.textContent = emoji;
-        item.onclick = () => {
-          // Add emoji to custom carriers text field
-          customCarriers.value += emoji;
-        };
-        selectorGrid.appendChild(item);
-      });
-
-      selector.appendChild(selectorGrid);
-    }
 
     // Simplified functions for backward compatibility
     function showDecodeBubble(sel) {
@@ -1423,7 +2378,7 @@
       // Check if user is in an input context to avoid triggering while typing
       const activeElement = document.activeElement;
       const isInputContext = activeElement && (
-        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'INPUT' ||
         activeElement.tagName === 'TEXTAREA' ||
         activeElement.contentEditable === 'true' ||
         activeElement.closest('[contenteditable="true"]')
@@ -1449,6 +2404,9 @@
         e.stopPropagation();
         console.log('[HiddenMsg] V key detected - opening decode mode');
 
+        // Close any open emoji picker first
+        FloatingEmojiPicker.closePicker();
+
         const existingModal = document.querySelector('.hidden-msg-modal');
         if (existingModal) {
           // Modal is open, close it
@@ -1467,6 +2425,9 @@
         e.preventDefault();
         e.stopPropagation();
         console.log('[HiddenMsg] F key detected - opening encode mode');
+
+        // Close any open emoji picker first
+        FloatingEmojiPicker.closePicker();
 
         const existingModal = document.querySelector('.hidden-msg-modal');
         if (existingModal) {
@@ -1515,8 +2476,14 @@
         if (betaCheckbox) {
           betaCheckbox.checked = betaScannerEnabled;
         }
+
+        // Show status indicator when modal is not open
+        const existingModal = document.querySelector('.hidden-msg-modal');
+        if (!existingModal) {
+          showScreenerStatusIndicator(betaScannerEnabled);
+        }
       }
-    });   
+    });
 
     /* ---------- 7. Menu commands ---------- */
     if (typeof GM_registerMenuCommand === 'function') {
