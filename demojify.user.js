@@ -383,7 +383,7 @@
       .hidden-msg-decode-result.no-message{background:#fff3cd;border-color:#ffeaa7;color:#8d6e63;word-wrap:break-word;word-break:break-word;white-space:pre-wrap;overflow-wrap:break-word}
 
       .hidden-msg-highlight{position:relative;background:rgba(255,235,59,0.3);border:2px dashed #ffc107;border-radius:4px;cursor:pointer;display:inline;padding:2px 4px;margin:0 2px}
-
+      
       /* Completely disable CSS tooltip - we'll use JavaScript only */
       .hidden-msg-highlight::after{display:none !important}
 
@@ -735,7 +735,7 @@
       function showDecodeResult(result) {
         decodeResult.style.display = 'block';
         decodeResult.className = 'hidden-msg-decode-result';
-
+        
         // Handle both old string format and new object format for backward compatibility
         if (typeof result === 'string') {
           decodeResult.textContent = `Hidden message: ${result}`;
@@ -992,7 +992,7 @@
       // Group consecutive zero-width characters
       const zwGroups = [];
       let currentGroup = [];
-
+      
       for (const cp of cps) {
         if (cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)) {
           currentGroup.push(cp);
@@ -1008,7 +1008,7 @@
       if (zwGroups.length === 0) return null;
 
       // Try to detect patterns
-      const uniqueChars = [...new Set(cps.filter(cp =>
+      const uniqueChars = [...new Set(cps.filter(cp => 
         cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF)
       ))];
 
@@ -1021,15 +1021,15 @@
         });
 
         const values = cps.map(cp => charToValue[cp]).filter(v => v !== undefined);
-
+        
         // Try different interpretations
         const attempts = [];
-
+        
         // Attempt 1: Direct byte values
         if (uniqueChars.length <= 256) {
           attempts.push(values);
         }
-
+        
         // Attempt 2: Binary if exactly 2 unique chars
         if (uniqueChars.length === 2 && values.length >= 8) {
           const bytes = [];
@@ -1047,10 +1047,10 @@
         for (const attempt of attempts) {
           const text = tryUtf8(attempt);
           if (text && isLikelyText(text)) {
-            return {
-              text: text,
+            return { 
+              text: text, 
               mapping: 'auto-learned',
-              details: `${uniqueChars.length} unique chars`
+              details: `${uniqueChars.length} unique chars` 
             };
           }
         }
@@ -1110,10 +1110,11 @@
         NodeFilter.SHOW_TEXT,
         {
           acceptNode: function(node) {
-            // Skip script, style, and already highlighted content
+            // Skip script, style, modal content, tooltips, and already highlighted content
             if (node.parentElement.tagName === 'SCRIPT' ||
                 node.parentElement.tagName === 'STYLE' ||
                 node.parentElement.closest('.hidden-msg-modal') ||
+                node.parentElement.closest('.hidden-msg-hover-tooltip') ||
                 node.parentElement.classList.contains('hidden-msg-highlight')) {
               return NodeFilter.FILTER_REJECT;
             }
@@ -1144,7 +1145,7 @@
             mapping: result.mapping,
             details: result.details
           });
-
+          
           const mapping = result.mapping || 'unknown';
           const details = result.details || '';
           highlightEncodedText(textNode, text, result.text, mapping, details);
@@ -1157,7 +1158,7 @@
       const highlight = document.createElement('span');
       highlight.className = 'hidden-msg-highlight';
       highlight.textContent = originalText;
-
+      
       // Store decoding information for tooltip
       highlight.dataset.decodedText = decodedText;
       highlight.dataset.mapping = mapping;
@@ -1174,7 +1175,7 @@
           const storedMapping = target.dataset.mapping;
           const storedDetails = target.dataset.details;
           const storedOriginalText = target.dataset.originalText;
-
+          
           showHoverTooltip(target, storedDecodedText, storedMapping, storedDetails, storedOriginalText);
         }, 100);
       });
@@ -1207,39 +1208,39 @@
 
       const tooltip = document.createElement('div');
       tooltip.className = 'hidden-msg-hover-tooltip';
-
+      
       // Create tooltip content
       const content = document.createElement('div');
       content.innerHTML = `
         <div style="font-weight: bold; margin-bottom: 4px;">Decoded: ${decodedText}</div>
         <div style="color: #ccc; font-size: 12px;">mapping: ${mapping}${details ? ` (${details})` : ''}</div>
       `;
-
+      
       // Add "copy raw selectors" button for unknown mappings
       if (mapping === 'unknown' || mapping === 'auto-learned') {
         const copyBtn = document.createElement('button');
         copyBtn.innerHTML = '📋 copy raw selectors';
         copyBtn.style.cssText = `
-          background: #666;
-          color: white;
-          border: none;
-          padding: 2px 6px;
-          margin-top: 4px;
-          border-radius: 3px;
-          font-size: 10px;
+          background: #666; 
+          color: white; 
+          border: none; 
+          padding: 2px 6px; 
+          margin-top: 4px; 
+          border-radius: 3px; 
+          font-size: 10px; 
           cursor: pointer;
           display: block;
         `;
         copyBtn.onclick = (e) => {
           e.stopPropagation();
-
+          
           // Extract raw variation selectors and zero-width chars
           const rawSelectors = [...originalText]
             .map(c => c.codePointAt(0))
             .filter(cp => cp >= 0x200B || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xE0100 && cp <= 0xE01EF))
             .map(cp => `U+${cp.toString(16).toUpperCase()}`)
             .join(' ');
-
+          
           navigator.clipboard.writeText(rawSelectors).then(() => {
             copyBtn.innerHTML = '✅ copied!';
             setTimeout(() => copyBtn.innerHTML = '📋 copy raw selectors', 1000);
@@ -1250,7 +1251,7 @@
         };
         content.appendChild(copyBtn);
       }
-
+      
       tooltip.appendChild(content);
       document.body.appendChild(tooltip);
 
@@ -1258,11 +1259,11 @@
       const rect = element.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-
+      
       // Default positioning
       let left = rect.left;
       let top = rect.bottom + 5;
-
+      
       // Adjust if tooltip would go off-screen
       if (left + 300 > viewportWidth) {
         left = viewportWidth - 310; // Account for tooltip max-width + margin
@@ -1270,11 +1271,11 @@
       if (left < 10) {
         left = 10;
       }
-
+      
       if (top + 100 > viewportHeight) {
         top = rect.top - 105; // Show above element instead
       }
-
+      
       tooltip.style.left = left + 'px';
       tooltip.style.top = top + 'px';
 
@@ -1291,7 +1292,7 @@
         window.currentTooltip.remove();
         window.currentTooltip = null;
       }
-
+      
       // Remove the class that hides CSS tooltip
       if (window.currentTooltipElement) {
         window.currentTooltipElement.classList.remove('has-js-tooltip');
@@ -1323,7 +1324,7 @@
       // Use enhanced cascade decoder as fallback
       const cps = [...text].map(c => c.codePointAt(0))
                            .filter(cp => cp >= 0x200B);
-
+      
       if (cps.length > 0) {
         const result = bruteDecode(cps);
         if (result) return result;
@@ -1419,16 +1420,30 @@
         return;
       }
 
+      // Check if user is in an input context to avoid triggering while typing
+      const activeElement = document.activeElement;
+      const isInputContext = activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.contentEditable === 'true' ||
+        activeElement.closest('[contenteditable="true"]')
+      );
+
+      if (isInputContext) {
+        return; // Don't trigger shortcuts while typing
+      }
+
       // Debug logging
       console.log('[HiddenMsg] Keyboard event:', {
         key: e.key,
+        code: e.code,
         keyLower: e.key.toLowerCase(),
         ctrlKey: e.ctrlKey,
         shiftKey: e.shiftKey,
         altKey: e.altKey
       });
 
-      if (e.key.toLowerCase() === 'v') {
+   if (e.key.toLowerCase() === 'v') {
         // Ctrl+Shift+V = Toggle decode mode
         e.preventDefault();
         e.stopPropagation();
@@ -1448,7 +1463,7 @@
           }
         }
       } else if (e.key.toLowerCase() === 'f') {
-        // Ctrl+Shift+X = Toggle encode mode
+        // Ctrl+Shift+F = Toggle encode mode
         e.preventDefault();
         e.stopPropagation();
         console.log('[HiddenMsg] F key detected - opening encode mode');
@@ -1467,8 +1482,41 @@
             showEncodeBubble(null);
           }
         }
+      } else if (e.code === 'Comma') {
+        // Ctrl+Shift+, = Toggle detective overlay icon visibility
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[HiddenMsg] Comma key detected - toggling detective overlay icon');
+
+        const floatingBtn = document.getElementById('hidden-msg-floating-btn');
+        if (floatingBtn) {
+          // Toggle visibility
+          const isVisible = floatingBtn.style.display !== 'none';
+          floatingBtn.style.display = isVisible ? 'none' : 'flex';
+          console.log('[HiddenMsg] Detective overlay icon', isVisible ? 'hidden' : 'shown');
+        }
+      } else if (e.code === 'Period') {
+        // Ctrl+Shift+. = Toggle beta flag analyzer function
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[HiddenMsg] Period key detected - toggling beta scanner');
+
+        betaScannerEnabled = !betaScannerEnabled;
+        if (betaScannerEnabled) {
+          startPageScanning();
+          console.log('[HiddenMsg] Beta scanner enabled');
+        } else {
+          stopPageScanning();
+          console.log('[HiddenMsg] Beta scanner disabled');
+        }
+
+        // Update checkbox in modal if it exists
+        const betaCheckbox = document.querySelector('#beta-scanner');
+        if (betaCheckbox) {
+          betaCheckbox.checked = betaScannerEnabled;
+        }
       }
-    });
+    });   
 
     /* ---------- 7. Menu commands ---------- */
     if (typeof GM_registerMenuCommand === 'function') {
@@ -1524,7 +1572,7 @@
       last = now;
     });
 
-    log('Loaded — Encode: Ctrl+Shift+F | Decode: Ctrl+Shift+V');
+    log('Loaded — Encode: Ctrl+Shift+F | Decode: Ctrl+Shift+V | Toggle Detective Icon: Ctrl+Shift+, | Toggle Beta Scanner: Ctrl+Shift+.');
 
   } catch (err) {
     console.error('[HiddenMsg] userscript failed:', err);
