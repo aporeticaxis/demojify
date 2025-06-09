@@ -12,15 +12,12 @@
 1. **Install Tampermonkey**
 
 3. **Grab the script**  
-   *Preferred:* **Click** <kbd>Raw</kbd> on [`demojify.user.js`](./demojify.user.js).
+   *Preferred:* **Click** <kbd>Raw</kbd> on [`demojify.user.js`](./demojify.user.js). | 
    [>or click here<](https://raw.githubusercontent.com/aporeticaxis/demojify/main/demojify.user.js)
    Tampermonkey pops up an *Install* dialog automatically.  
    *Alternate:* Copy the code → Tampermonkey Dashboard → **➕ Create** → paste → **Save**.
 
 5. Reload any page – the 🕵️ button appears bottom-right.
-
-6. • **Encode:** `Ctrl + Shift + F` → type secret → pick emoji → copy  
-   • **Decode:** select text → `Ctrl + Shift + V`
 
 *(Everything runs 100 % locally – no data ever leaves your browser.)*
 
@@ -30,11 +27,11 @@
 
 | Screen | What to Capture | Suggested Filename |
 | ------ | --------------- | ------------------ |
-| Floating 🕵️ button | Full browser window, bottom-right badge highlighted | ![screenshot_fab.png](https://github.com/user-attachments/assets/908ba736-05b5-446a-8b50-6478711a11b7) |
-| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://github.com/user-attachments/assets/0dc64eef-c251-4ea0-ab48-16918e141f1a) |
-| Encode → 1-Click | Secret text, emoji grid, green “Copied!” toast | ![screenshot_encode_1click.png](https://github.com/user-attachments/assets/0560167a-ede2-4294-b490-5ef299c24b30) |
-| Encode → Free Form | Custom carriers area with mixed emoji/text | ![screenshot_encode_freeform.png](https://github.com/user-attachments/assets/97b18afa-d63d-4232-adb5-f1d34ee51577) |
-| **Beta Scanner** highlight | Encoded text inline + yellow dashed border + tooltip | ![screenshot_beta_scanner.png](https://github.com/user-attachments/assets/f53d90db-70b5-4c16-a984-428485e7e0fc)|
+| Floating 🕵️ button | Full browser window, bottom-right badge highlighted | ![screenshot_fab.png](https://private-user-images.githubusercontent.com/123844654/452649549-01371d58-f96f-4ccc-8b27-eb3e5478edbb.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTQ5LTAxMzcxZDU4LWY5NmYtNGNjYy04YjI3LWViM2U1NDc4ZWRiYi5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT05N2Y2ZDExMDZmYTA1Y2MyMzJjMDg4ZmRkNjU0OWIyNzMwMWIzOTQwNzU2OGM1ZDg4OTUxN2VlN2IwMjE4ZWY5JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.87-isCO4oCgoWJ7K1SqKHYaT4nuNtdBLH4ZlfMiAZX0) |
+| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://private-user-images.githubusercontent.com/123844654/452649569-dbe1db95-ca78-4a7d-8550-9affa4be791f.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTY5LWRiZTFkYjk1LWNhNzgtNGE3ZC04NTUwLTlhZmZhNGJlNzkxZi5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT04MzNjNTA0NzdhNGE4YjQ2N2ZiMTFmZGIzNzIwYjFjZTU2OGY4ZDE2NGI4MzkxNDMxZmU1Y2VhYmIwMDMyZmUzJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.Ypnyb0Hv-3TiEjgdX3_X-3WXSrDQEBAh23Xon0qFIGw) |
+| Encode → 1-Click | Secret text, emoji grid, green “Copied!” toast | ![screenshot_encode_1click.png](https://private-user-images.githubusercontent.com/123844654/452649563-b79e2f0d-46f6-4765-8450-6c92305f2c4a.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTYzLWI3OWUyZjBkLTQ2ZjYtNDc2NS04NDUwLTZjOTIzMDVmMmM0YS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1jY2I1MDQwZjg2YjYzZTNkZDY4YzkyMTc1YzI3MWYyMDIyM2QxZWM5MGU4NzMyOWVjM2Y5MTlkODhjOTQxZDA1JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.TDpbItyp6X_JbIy6aWzbK99i3QGLlrQ4sg_MZ3FYS3c) |
+| Encode → Free Form | Custom carriers area with mixed emoji/text | ![screenshot_encode_freeform.png](https://private-user-images.githubusercontent.com/123844654/452649558-2fabc604-f221-464d-aab7-f204377f445e.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTU4LTJmYWJjNjA0LWYyMjEtNDY0ZC1hYWI3LWYyMDQzNzdmNDQ1ZS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT00ZDliMGJiM2JiYTVjNGIyYzk2MDIzZTgxNGY3ZmJlNTJiMDcxMTgwMDFjYzc5NzE2NWZmMGYwYjY1M2ZiMzMzJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.dRLafVItfRHZO8clxxU0qjgztnfWzoAQBwujLWkfRqA) |
+| **Beta Scanner** highlight | Encoded text inline + yellow dashed border + tooltip | ![screenshot_beta_scanner.png](https://private-user-images.githubusercontent.com/123844654/452649579-31e61918-8ce8-48dd-a374-822de490ac07.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTc5LTMxZTYxOTE4LThjZTgtNDhkZC1hMzc0LTgyMmRlNDkwYWMwNy5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1hYjQyZDg4OGE2ZmUyNDJlYjEzYTVhM2ViZjM2YTg2N2YxNDgzN2QwM2MyNjhhODZkYjBkMjIyMTc4ZTIwMzRkJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.6qXYk3-c2-bd-2nlgruXfKnF4LZYZU_zyJLHwTDovDw)|
 
 ---
 
@@ -53,11 +50,13 @@
 
 ## 🔑 Shortcuts
 
-| Action           | Keys                      | Context                           |
-| ---------------- | ------------------------- | --------------------------------- |
-| **Encode modal** | `Ctrl + Shift + F`        | anywhere                          |
-| **Decode modal** | `Ctrl + Shift + V`        | anywhere (uses selection, if any) |
-| **Close modal**  | `Esc`                     | inside modal                      |
+| Action                    | Keys                      | Context                           |
+| ------------------------- | ------------------------- | --------------------------------- |
+| **Encode modal**          | `Ctrl + Shift + F`        | anywhere                          |
+| **Decode modal**          | `Ctrl + Shift + V`        | anywhere (uses selection, if any) |
+| **Toggle icon overlay**   | `Ctrl + Shift + ,`        | hide/show 🕵️ floating button     |
+| **Toggle page scanner**   | `Ctrl + Shift + .`        | enable/disable page highlighting  |
+| **Close modal**           | `Esc`                     | inside modal                      |
 
 ---
 
