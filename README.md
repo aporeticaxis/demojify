@@ -27,13 +27,16 @@
 
 | Screen | What to Capture | Suggested Filename |
 | ------ | --------------- | ------------------ |
-| Floating 🕵️ button | Full browser window, bottom-right badge highlighted | ![screenshot_fab.png](https://private-user-images.githubusercontent.com/123844654/452649549-01371d58-f96f-4ccc-8b27-eb3e5478edbb.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTQ5LTAxMzcxZDU4LWY5NmYtNGNjYy04YjI3LWViM2U1NDc4ZWRiYi5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT05N2Y2ZDExMDZmYTA1Y2MyMzJjMDg4ZmRkNjU0OWIyNzMwMWIzOTQwNzU2OGM1ZDg4OTUxN2VlN2IwMjE4ZWY5JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.87-isCO4oCgoWJ7K1SqKHYaT4nuNtdBLH4ZlfMiAZX0) |
-| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://private-user-images.githubusercontent.com/123844654/452649569-dbe1db95-ca78-4a7d-8550-9affa4be791f.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTY5LWRiZTFkYjk1LWNhNzgtNGE3ZC04NTUwLTlhZmZhNGJlNzkxZi5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT04MzNjNTA0NzdhNGE4YjQ2N2ZiMTFmZGIzNzIwYjFjZTU2OGY4ZDE2NGI4MzkxNDMxZmU1Y2VhYmIwMDMyZmUzJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.Ypnyb0Hv-3TiEjgdX3_X-3WXSrDQEBAh23Xon0qFIGw) |
-| Encode → 1-Click | Secret text, emoji grid, green “Copied!” toast | ![screenshot_encode_1click.png](https://private-user-images.githubusercontent.com/123844654/452649563-b79e2f0d-46f6-4765-8450-6c92305f2c4a.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTYzLWI3OWUyZjBkLTQ2ZjYtNDc2NS04NDUwLTZjOTIzMDVmMmM0YS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1jY2I1MDQwZjg2YjYzZTNkZDY4YzkyMTc1YzI3MWYyMDIyM2QxZWM5MGU4NzMyOWVjM2Y5MTlkODhjOTQxZDA1JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.TDpbItyp6X_JbIy6aWzbK99i3QGLlrQ4sg_MZ3FYS3c) |
-| Encode → Free Form | Custom carriers area with mixed emoji/text | ![screenshot_encode_freeform.png](https://private-user-images.githubusercontent.com/123844654/452649558-2fabc604-f221-464d-aab7-f204377f445e.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTU4LTJmYWJjNjA0LWYyMjEtNDY0ZC1hYWI3LWYyMDQzNzdmNDQ1ZS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT00ZDliMGJiM2JiYTVjNGIyYzk2MDIzZTgxNGY3ZmJlNTJiMDcxMTgwMDFjYzc5NzE2NWZmMGYwYjY1M2ZiMzMzJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.dRLafVItfRHZO8clxxU0qjgztnfWzoAQBwujLWkfRqA) |
-| **Beta Scanner** highlight | Encoded text inline + yellow dashed border + tooltip | ![screenshot_beta_scanner.png](https://private-user-images.githubusercontent.com/123844654/452649579-31e61918-8ce8-48dd-a374-822de490ac07.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NDkzMzEzNDgsIm5iZiI6MTc0OTMzMTA0OCwicGF0aCI6Ii8xMjM4NDQ2NTQvNDUyNjQ5NTc5LTMxZTYxOTE4LThjZTgtNDhkZC1hMzc0LTgyMmRlNDkwYWMwNy5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUwNjA3JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MDYwN1QyMTE3MjhaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1hYjQyZDg4OGE2ZmUyNDJlYjEzYTVhM2ViZjM2YTg2N2YxNDgzN2QwM2MyNjhhODZkYjBkMjIyMTc4ZTIwMzRkJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.6qXYk3-c2-bd-2nlgruXfKnF4LZYZU_zyJLHwTDovDw)|
+| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://github.com/user-attachments/assets/0dc64eef-c251-4ea0-ab48-16918e141f1a) |Add commentMore actions
+| Encode → 1-Click | Secret text, emoji grid, green “Copied!” toast | ![screenshot_encode_1click.png](https://github.com/user-attachments/assets/0560167a-ede2-4294-b490-5ef299c24b30) |
+| Encode → Free Form | Custom carriers area with mixed emoji/text | ![screenshot_encode_freeform.png](https://github.com/user-attachments/assets/97b18afa-d63d-4232-adb5-f1d34ee51577) |
+| Floating 🕵️ button | Full browser window, bottom-right badge highlighted | ![screenshot_fab.png](https://github.com/user-attachments/assets/908ba736-05b5-446a-8b50-6478711a11b7) |
+| **Beta Scanner** highlight | Encoded text inline + yellow dashed border + tooltip | ![screenshot_beta_scanner.png](https://github.com/user-attachments/assets/f53d90db-70b5-4c16-a984-428485e7e0fc)|
+| **NEW: Floating Emoji Picker** | Chat-app-style picker with skin tones, categories, search | ![emoji_picker.png](https://github.com/user-attachments/assets/5d5520cc-bd59-49ee-aa12-057933148504) | 
+| **NEW: Status Indicator** | Bottom-center yellow "Screener ON/OFF" message | ![scanner_shortcut_toggle_status.png](https://github.com/user-attachments/assets/36817402-4512-4c4e-87a5-105b487a9f5c) |
 
 ---
+
 
 ## ✨ Key Features
 
@@ -42,7 +45,10 @@
 
   * *1-Click* – fastest path: pick a single emoji/letter carrier.
   * *Free Form* – distribute bytes across any text/emoji string you supply.
+* **Professional floating emoji picker** – chat-app-style interface with skin tone variations, category filtering, search, and recent/frequent emoji tracking.
 * **Enhanced multi-encoding detection** – beta scanner detects 5+ encoding schemes (32-VS, 16-VS, ZW-SPACE, ZWJ-BINARY, auto-learned) with confidence validation and mapping identification.
+* **Smart link handling** – tooltips automatically detect and render URLs as clickable links, with GIF preview for supported image links.
+* **Visual status feedback** – bottom-screen status indicator shows screener on/off state when toggling via keyboard shortcuts.
 * **Zero-dependency UI** – pure vanilla JS + CSS, SPA-safe (React, Vue, etc.).
 * **Robust UTF-8 path** – custom byte encoder/decoder to bypass Firefox XRay quirks.
 
@@ -83,6 +89,29 @@
   2. Type secret → type or click emojis to build your custom carrier string
   3. **Encode Message** → copy.
 
+### Floating Emoji Picker (NEW)
+
+The enhanced emoji picker provides a professional chat-app-style interface:
+
+* **Access**: Click the 😊 button next to any text input field in encode mode
+* **Features**:
+  - **Search**: Type to filter emojis by name
+  - **Categories**: Browse by Smileys, People, Animals, Food, etc.
+  - **Skin Tones**: 6 variations (Default, Light, Medium-Light, Medium, Medium-Dark, Dark)
+  - **Recent/Frequent**: Tracks your most used emojis
+  - **Multi-Selection**: Picker stays open for multiple emoji selection
+
+* **Skin Tone Variations**:
+  - **Hover** over any emoji with skin tone support to see variations popup
+  - **Hold** for 500ms or **click and drag** to select specific skin tones
+  - Global skin tone preference applies to future selections
+
+* **Smart Behaviors**:
+  - Only one picker open at a time (XOR logic)
+  - Click outside or press Esc to close
+  - Automatic positioning to stay within viewport bounds
+  - Remembers recent selections and skin tone preferences
+
 ### Beta Scanner (Enhanced Multi-Encoding Detection)
 
 Flip the **🧪 "Highlight encoded text on page"** toggle in any modal.
@@ -104,6 +133,28 @@ The enhanced observer will:
 * **Visual indicators** – mark encoded nodes with dashed yellow outline
 * **Cross-SPA compatibility** – stays active across React/Vue navigations
 * **Backward compatibility** – tries legacy methods first, then cascade detection
+
+### Smart Link Handling (NEW)
+
+Beta scanner tooltips now intelligently handle URLs in decoded content:
+
+* **Regular Links**: Automatically converts URLs to clickable hyperlinks
+* **GIF Links**: Detects `.gif` URLs and embeds the image directly in tooltip
+* **Image Preview**: Supports common image formats with fallback to clickable link
+* **Security**: Handles CORS restrictions gracefully with error fallbacks
+* **Auto-Detection**: Uses robust regex patterns to identify various URL formats
+
+### Visual Status Indicator (NEW)
+
+Get instant feedback when toggling the beta scanner:
+
+* **Activation**: Press `Ctrl + Shift + .` when modal is closed
+* **Display**: Yellow text appears at bottom-center of screen
+* **Messages**: 
+  - "Screener ON" (when enabling scanner)
+  - "Screener OFF" (when disabling scanner)
+* **Auto-Hide**: Status message fades after 3 seconds
+* **Non-Intrusive**: Positioned to avoid interfering with page content
 
 **Example tooltip output:**
 ```
