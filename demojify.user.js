@@ -1160,7 +1160,7 @@
       /* Completely disable CSS tooltip - we'll use JavaScript only */
       .hidden-msg-highlight::after{display:none !important}
 
-      .hidden-msg-hover-tooltip{position:fixed;background:#333;color:white;padding:12px 16px;border-radius:8px;font-size:14px;max-width:350px;word-wrap:break-word;z-index:2147483650;pointer-events:none;opacity:0;transition:opacity 0.2s ease;box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid #555}
+      .hidden-msg-hover-tooltip{position:fixed;background:#333;color:white;padding:12px 16px;border-radius:8px;font-size:14px;max-width:350px;word-wrap:break-word;z-index:2147483650;pointer-events:auto;opacity:0;transition:opacity 0.2s ease;box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid #555}
       .hidden-msg-hover-tooltip.show{opacity:1}
       .hidden-msg-hover-tooltip button{pointer-events:auto}
 
@@ -1550,22 +1550,64 @@
         }
       };
 
-      // Setup decoding with enhanced mapping display
+      // Setup decoding with enhanced mapping display and smart link handling
       function showDecodeResult(result) {
         decodeResult.style.display = 'block';
         decodeResult.className = 'hidden-msg-decode-result';
 
+        // Clear previous content
+        decodeResult.innerHTML = '';
+
         // Handle both old string format and new object format for backward compatibility
         if (typeof result === 'string') {
-          decodeResult.textContent = `Hidden message: ${result}`;
+          // Simple string result - apply link enhancement
+          const enhancedContent = enhanceContentWithLinks(result, 'unknown', '');
+
+          const messageContainer = document.createElement('div');
+          messageContainer.style.cssText = 'font-weight: bold; margin-bottom: 8px;';
+          messageContainer.textContent = 'Hidden message: ';
+
+          const contentDiv = document.createElement('div');
+          contentDiv.style.cssText = 'font-weight: normal; display: inline;';
+          contentDiv.appendChild(enhancedContent);
+
+          messageContainer.appendChild(contentDiv);
+          decodeResult.appendChild(messageContainer);
         } else if (result && result.text) {
-          // Enhanced display with mapping information
+          // Enhanced display with mapping information and smart link handling
           const mappingInfo = result.mapping || 'unknown';
           const details = result.details ? ` (${result.details})` : '';
-          decodeResult.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 8px;">Hidden message: ${result.text}</div>
-            <div style="color: #666; font-size: 12px;">Encoding: ${mappingInfo}${details}</div>
-          `;
+
+          // Create message header
+          const messageHeader = document.createElement('div');
+          messageHeader.style.cssText = 'font-weight: bold; margin-bottom: 8px;';
+          messageHeader.textContent = 'Hidden message: ';
+
+          // Apply smart link enhancement to the decoded text
+          const enhancedContent = enhanceContentWithLinks(result.text, mappingInfo, details);
+
+          // Style the enhanced content for modal context (different from tooltip)
+          enhancedContent.style.cssText = 'font-weight: normal; margin-bottom: 8px;';
+
+          // Adjust styling for modal context - remove mapping info since we show it separately
+          const contentText = enhancedContent.querySelector('div');
+          if (contentText) {
+            // Remove the mapping info that's added by enhanceContentWithLinks
+            const mappingElement = contentText.nextElementSibling;
+            if (mappingElement && mappingElement.textContent.includes('mapping:')) {
+              mappingElement.remove();
+            }
+          }
+
+          // Create encoding info footer
+          const encodingInfo = document.createElement('div');
+          encodingInfo.style.cssText = 'color: #666; font-size: 12px; margin-top: 8px;';
+          encodingInfo.textContent = `Encoding: ${mappingInfo}${details}`;
+
+          // Append all elements to the result container
+          decodeResult.appendChild(messageHeader);
+          decodeResult.appendChild(enhancedContent);
+          decodeResult.appendChild(encodingInfo);
         }
       }
 
@@ -2071,7 +2113,7 @@
 
       highlight.addEventListener('mouseleave', () => {
         clearTimeout(hoverTimeout);
-        hideHoverTooltip();
+        // Don't call hideHoverTooltip() directly - let the persistence logic in showHoverTooltip() handle it
       });
 
       // Replace text node with highlighted version
@@ -2101,8 +2143,8 @@
       // Create tooltip content with smart link handling
       const content = document.createElement('div');
 
-      // Enhanced content with link detection and GIF rendering
-      const enhancedContent = createEnhancedTooltipContent(decodedText, mapping, details);
+      // Enhanced content with link detection and GIF rendering using reusable function
+      const enhancedContent = enhanceContentWithLinks(decodedText, mapping, details);
       content.appendChild(enhancedContent);
 
       // Add "copy raw selectors" button for unknown mappings
@@ -2174,13 +2216,90 @@
       // Show tooltip immediately (remove delay)
       tooltip.classList.add('show');
 
-      // Store reference for cleanup
+      // Enhanced persistence: tooltip stays visible when hovering over tooltip or element
+      let isOverElement = true; // Start as true since we're showing the tooltip
+      let isOverTooltip = false;
+      let hideTimer = null;
+
+      const checkAndHideTooltip = () => {
+        // Clear any existing timer
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+
+        // Set a longer delay to handle gaps between element and tooltip
+        hideTimer = setTimeout(() => {
+          if (!isOverElement && !isOverTooltip) {
+            hideHoverTooltip();
+          }
+        }, 500); // Increased delay even more for better persistence
+      };
+
+      // Element mouse events
+      const elementMouseEnter = () => {
+        isOverElement = true;
+        // Cancel any pending hide operation
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+      };
+
+      const elementMouseLeave = () => {
+        isOverElement = false;
+        // Use a short delay before checking to allow mouse to reach tooltip
+        setTimeout(() => {
+          if (!isOverTooltip) {
+            checkAndHideTooltip();
+          }
+        }, 50);
+      };
+
+      // Tooltip mouse events
+      const tooltipMouseEnter = () => {
+        isOverTooltip = true;
+        // Cancel any pending hide operation immediately
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+      };
+
+      const tooltipMouseLeave = () => {
+        isOverTooltip = false;
+        // Use a short delay before checking to allow mouse to return to element
+        setTimeout(() => {
+          if (!isOverElement) {
+            checkAndHideTooltip();
+          }
+        }, 50);
+      };
+
+      // Add event listeners
+      element.addEventListener('mouseenter', elementMouseEnter);
+      element.addEventListener('mouseleave', elementMouseLeave);
+      tooltip.addEventListener('mouseenter', tooltipMouseEnter);
+      tooltip.addEventListener('mouseleave', tooltipMouseLeave);
+
+      // Store references and cleanup functions
       window.currentTooltip = tooltip;
       window.currentTooltipElement = element;
+      window.currentTooltipCleanup = () => {
+        // Clear any pending hide timer
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+        element.removeEventListener('mouseenter', elementMouseEnter);
+        element.removeEventListener('mouseleave', elementMouseLeave);
+        tooltip.removeEventListener('mouseenter', tooltipMouseEnter);
+        tooltip.removeEventListener('mouseleave', tooltipMouseLeave);
+      };
     }
 
-    // Smart link handling for tooltip content
-    function createEnhancedTooltipContent(decodedText, mapping, details) {
+    // Reusable smart link enhancement function for both tooltips and decoder modal
+    function enhanceContentWithLinks(decodedText, mapping, details) {
       const container = document.createElement('div');
 
       // URL detection regex (comprehensive pattern)
@@ -2197,9 +2316,9 @@
         if (isGifUrl(fullUrl)) {
           container.innerHTML = `
             <div style="font-weight: bold; margin-bottom: 8px;">🎬 GIF Link Detected</div>
-            <div class="gif-container" style="margin-bottom: 8px; max-width: 400px; max-height: 200px; overflow: hidden; border-radius: 4px;">
+            <div class="gif-container" style="margin-bottom: 8px; max-width: 100%; border-radius: 4px; display: flex; justify-content: center;">
               <img src="${fullUrl}"
-                   style="max-width: 100%; max-height: 200px; width: auto; height: auto; display: block; border-radius: 4px;"
+                   style="max-width: 100%; max-height: 300px; width: auto; height: auto; display: block; border-radius: 4px; object-fit: contain;"
                    onerror="this.parentElement.innerHTML='<div style=&quot;color:#ff6b6b;font-size:12px;padding:8px;&quot;>❌ Failed to load GIF<br><a href=&quot;${fullUrl}&quot; target=&quot;_blank&quot; style=&quot;color:#4fc3f7;&quot;>${truncateUrl(fullUrl)}</a></div>'"
                    onload="console.log('[HiddenMsg] GIF loaded successfully')" />
             </div>
@@ -2278,6 +2397,12 @@
     }
 
     function hideHoverTooltip() {
+      // Clean up event listeners
+      if (window.currentTooltipCleanup) {
+        window.currentTooltipCleanup();
+        window.currentTooltipCleanup = null;
+      }
+
       if (window.currentTooltip) {
         window.currentTooltip.remove();
         window.currentTooltip = null;
