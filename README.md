@@ -27,12 +27,13 @@
 
 | Screen | What to Capture | Suggested Filename |
 | ------ | --------------- | ------------------ |
-| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://github.com/user-attachments/assets/0dc64eef-c251-4ea0-ab48-16918e141f1a) |Add commentMore actions
+| Decode modal | Paste field + decoded result visible | ![screenshot_decode_modal.png](https://github.com/user-attachments/assets/0dc64eef-c251-4ea0-ab48-16918e141f1a) | 
 | Encode → 1-Click | Secret text, emoji grid, green “Copied!” toast | ![screenshot_encode_1click.png](https://github.com/user-attachments/assets/0560167a-ede2-4294-b490-5ef299c24b30) |
 | Encode → Free Form | Custom carriers area with mixed emoji/text | ![screenshot_encode_freeform.png](https://github.com/user-attachments/assets/97b18afa-d63d-4232-adb5-f1d34ee51577) |
 | Floating 🕵️ button | Full browser window, bottom-right badge highlighted | ![screenshot_fab.png](https://github.com/user-attachments/assets/908ba736-05b5-446a-8b50-6478711a11b7) |
 | **Beta Scanner** highlight | Encoded text inline + yellow dashed border + tooltip | ![screenshot_beta_scanner.png](https://github.com/user-attachments/assets/f53d90db-70b5-4c16-a984-428485e7e0fc)|
-| **NEW: Floating Emoji Picker and GIF rendering** | Chat-app-style picker with skin tones, categories, search, GIF rendering | ![emoji_picker.png](https://github.com/user-attachments/assets/5d5520cc-bd59-49ee-aa12-057933148504) | 
+| **NEW: Emoji Picker with variants | Chat-app-style picker with skin tones, categories, search | ![emoji_picker.png](https://github.com/user-attachments/assets/d5bff493-349d-49d7-b137-652a58bc4d37) |
+| **NEW: Scanner+Modal GIF rendering | What it says! | ![gif_renderer.png](https://github.com/user-attachments/assets/5d5520cc-bd59-49ee-aa12-057933148504) |
 | **NEW: Status Indicator** | Bottom-center yellow "Screener ON/OFF" message | ![scanner_shortcut_toggle_status.png](https://github.com/user-attachments/assets/36817402-4512-4c4e-87a5-105b487a9f5c) |
 
 ---
